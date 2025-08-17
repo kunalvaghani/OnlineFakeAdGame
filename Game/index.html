@@ -43,7 +43,7 @@
     }
 
     /* ============================================================
-       TinySynth: SFX + reactive procedural music
+       TinySynth: SFX + reactive procedural music (iOS-safe ramps)
        ============================================================ */
     class TinySynth {
       constructor(){
@@ -51,28 +51,74 @@
         this.musicTimer=null; this.musicOn=false; this.musicBpm=112; this.beatMs=60000/this.musicBpm/2;
         this.step=0; this.intensity=0; this.isBoss=false; this.paused=false;
       }
-      unlock(){ if(this.ctx) return; try{
-        this.ctx=new (window.AudioContext||window.webkitAudioContext)();
-        this.masterGain=this.ctx.createGain();
-        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
-        this.masterGain.connect(this.ctx.destination);
-      }catch{} }
+      unlock(){
+        if (this.ctx) return;
+        try {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+          this.masterGain.connect(this.ctx.destination);
+        } catch {}
+      }
       setEnabled(on){ this.enabled=!!on; }
-      setVolume(v){ this.volume=Math.max(0,Math.min(1,v)); if(this.masterGain&&this.ctx){ this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime); } }
-      pause(flag){ if(!this.ctx) return; this.paused=!!flag; if(flag){try{this.ctx.suspend();}catch{}} else {try{this.ctx.resume();}catch{}} }
-      _toOut(node){ if(this.masterGain) return node.connect(this.masterGain); return node.connect(this.ctx.destination); }
-      tone(f=440,d=0.12,t='sine',v=0.2){ if(!this.enabled||!this.ctx) return;
-        const c=this.ctx,n=c.currentTime+.005,o=c.createOscillator(),g=c.createGain();
-        o.type=t;o.frequency.setValueAtTime(f,n);
-        g.gain.setValueAtTime(0,n); g.gain.linearRampToValueAtTime(v,n+.02); g.gain.exponentialRampToValueAtTime(.0001,n+d);
-        o.connect(g); this._toOut(g); o.start(n); o.stop(n+d+.02);
+      setVolume(v){
+        this.volume=Math.max(0,Math.min(1,v));
+        if(this.masterGain&&this.ctx){
+          try { this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime); } catch {}
+        }
       }
-      thud(b=90,d=.2,v=.25){ if(!this.enabled||!this.ctx) return;
-        const c=this.ctx,n=c.currentTime+.005,o=c.createOscillator(),g=c.createGain();
-        o.type='sine'; o.frequency.setValueAtTime(b*2,n); o.frequency.exponentialRampToValueAtTime(b,n+d);
-        g.gain.setValueAtTime(0,n); g.gain.linearRampToValueAtTime(v,n+.02); g.gain.exponentialRampToValueAtTime(.0001,n+d);
-        o.connect(g); this._toOut(g); o.start(n); o.stop(n+d+.03);
+      pause(flag){
+        if(!this.ctx) return;
+        this.paused=!!flag;
+        try {
+          if(flag) this.ctx.suspend(); else this.ctx.resume();
+        } catch {}
       }
+      _toOut(node){ return (this.masterGain ? node.connect(this.masterGain) : node.connect(this.ctx.destination)); }
+
+      // ---------- iOS-safe tone (no zero exponential ramps) ----------
+      tone(f=440, d=0.12, t='sine', v=0.2){
+        if (!this.enabled) return;
+        this.unlock();
+        const c = this.ctx; if (!c) return;
+        if (c.state === 'suspended') { try { c.resume(); } catch {} }
+        if (c.state !== 'running') return;
+
+        try {
+          const now = c.currentTime + 0.005, eps = 1e-4;
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = t; o.frequency.setValueAtTime(f, now);
+          g.gain.setValueAtTime(eps, now);
+          g.gain.linearRampToValueAtTime(Math.max(eps, v), now + 0.02);
+          g.gain.linearRampToValueAtTime(eps, now + d);
+          o.connect(g); this._toOut(g);
+          o.start(now); o.stop(now + d + 0.05);
+        } catch {}
+      }
+
+      // ---------- iOS-safe thud (no zero exponential ramps) ----------
+      thud(b=90, d=.2, v=.25){
+        if (!this.enabled) return;
+        this.unlock();
+        const c = this.ctx; if (!c) return;
+        if (c.state === 'suspended') { try { c.resume(); } catch {} }
+        if (c.state !== 'running') return;
+
+        try {
+          const now = c.currentTime + 0.005, eps = 1e-4;
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(b*2, now);
+          o.frequency.linearRampToValueAtTime(b, now + d);
+          g.gain.setValueAtTime(eps, now);
+          g.gain.linearRampToValueAtTime(Math.max(eps, v), now + 0.02);
+          g.gain.linearRampToValueAtTime(eps, now + d);
+          o.connect(g); this._toOut(g);
+          o.start(now); o.stop(now + d + 0.05);
+        } catch {}
+      }
+
+      // UI & game cues
       uiClick(){ this.tone(600,.07,'triangle',.12); }
       ok(){ this.tone(880,.08,'sine',.18); this.tone(1320,.08,'sine',.10); }
       bad(){ this.tone(220,.14,'sawtooth',.18); }
@@ -286,13 +332,13 @@
           if (this._restarting) return; this._restarting = true;
           this.playing=false; this.paused=true;
           try { this.synth.stopMusic(); } catch {}
+          if (this.attackTimer) { try { this.attackTimer.remove(false); } catch {} this.attackTimer=null; }
           try { this.time.removeAllEvents(); } catch {}
           try { this.tweens.killAll(); } catch {}
           try { this.input.removeAllListeners(); this.input.keyboard?.removeAllKeys(true); this.input.enabled=false; } catch {}
           try { this.events.removeAllListeners(); } catch {}
           this.pauseOverlay?.destroy(); this.shopOverlay?.destroy(); this.startBlock?.destroy();
-
-          // Hard reboot the whole game to avoid Phaser internal “cut” crashes
+          // Hard reboot the whole game to avoid internal “cut”/dangling handler issues
           setTimeout(()=>{ window.__csrHardRestart(data); }, 0);
         }
 
@@ -360,6 +406,8 @@
 
           // Extra safety on scene shutdown
           this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            try { this.synth.stopMusic(); } catch {}
+            if (this.attackTimer) { try { this.attackTimer.remove(false); } catch {} this.attackTimer=null; }
             try { this.time.removeAllEvents(); } catch {}
             try { this.tweens.killAll(); } catch {}
             try { this.input.removeAllListeners(); this.input.keyboard?.removeAllKeys(true); } catch {}
