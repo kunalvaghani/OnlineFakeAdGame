@@ -51,14 +51,14 @@
         this.musicTimer=null; this.musicOn=false; this.musicBpm=112; this.beatMs=60000/this.musicBpm/2;
         this.step=0; this.intensity=0; this.isBoss=false; this.paused=false;
       }
-      unlock(){
-        if (this.ctx) return;
+     unlock(){
+        if (this.ctx || !this.enabled) return;
         try {
           this.ctx = new (window.AudioContext || window.webkitAudioContext)();
           this.masterGain = this.ctx.createGain();
           this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
           this.masterGain.connect(this.ctx.destination);
-        } catch {}
+        } catch { /* stay silent */ }
       }
       setEnabled(on){ this.enabled=!!on; }
       setVolume(v){
@@ -77,45 +77,42 @@
       _toOut(node){ return (this.masterGain ? node.connect(this.masterGain) : node.connect(this.ctx.destination)); }
 
       // ---------- iOS-safe tone (no zero exponential ramps) ----------
-      tone(f=440, d=0.12, t='sine', v=0.2){
+     tone(f=440, d=0.12, t='sine', v=0.2){
         if (!this.enabled) return;
-        this.unlock();
-        const c = this.ctx; if (!c) return;
-        if (c.state === 'suspended') { try { c.resume(); } catch {} }
+        this.unlock(); const c=this.ctx; if(!c) return;
+        if (c.state === 'suspended') { try { c.resume(); } catch { return; } }
         if (c.state !== 'running') return;
-
         try {
           const now = c.currentTime + 0.005, eps = 1e-4;
           const o = c.createOscillator(), g = c.createGain();
-          o.type = t; o.frequency.setValueAtTime(f, now);
+          o.type=t; o.frequency.setValueAtTime(f, now);
           g.gain.setValueAtTime(eps, now);
           g.gain.linearRampToValueAtTime(Math.max(eps, v), now + 0.02);
           g.gain.linearRampToValueAtTime(eps, now + d);
-          o.connect(g); this._toOut(g);
+          o.connect(g); (this.masterGain? g.connect(this.masterGain): g.connect(c.destination));
           o.start(now); o.stop(now + d + 0.05);
-        } catch {}
+        } catch { /* swallow iOS WebAudio throws */ }
       }
+
 
       // ---------- iOS-safe thud (no zero exponential ramps) ----------
       thud(b=90, d=.2, v=.25){
         if (!this.enabled) return;
-        this.unlock();
-        const c = this.ctx; if (!c) return;
-        if (c.state === 'suspended') { try { c.resume(); } catch {} }
+        this.unlock(); const c=this.ctx; if(!c) return;
+        if (c.state === 'suspended') { try { c.resume(); } catch { return; } }
         if (c.state !== 'running') return;
-
         try {
           const now = c.currentTime + 0.005, eps = 1e-4;
           const o = c.createOscillator(), g = c.createGain();
-          o.type = 'sine';
+          o.type='sine';
           o.frequency.setValueAtTime(b*2, now);
           o.frequency.linearRampToValueAtTime(b, now + d);
           g.gain.setValueAtTime(eps, now);
           g.gain.linearRampToValueAtTime(Math.max(eps, v), now + 0.02);
           g.gain.linearRampToValueAtTime(eps, now + d);
-          o.connect(g); this._toOut(g);
+          o.connect(g); (this.masterGain? g.connect(this.masterGain): g.connect(c.destination));
           o.start(now); o.stop(now + d + 0.05);
-        } catch {}
+        } catch { /* swallow iOS WebAudio throws */ }
       }
 
       // UI & game cues
@@ -166,7 +163,17 @@
       const LEVEL_LENGTH=5200;
       const GATE_SPAWN_EVERY=900, ENEMY_SPAWN_EVERY=800, HAZARD_SPAWN_EVERY=1100;
       const BOSS_TRIGGER_REMAINING=600, START_TROOPS_BASE=10, DPS_PER_TROOPER=.6, TELEGRAPH_TIME=800, BOSS_ATTACK_GAP=[1200,1800];
-
+      const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      document.addEventListener('touchend', () => {
+        try {
+          const g = window.__game;
+          const scene = g && g.scene && g.scene.keys && g.scene.keys['game'];
+          const synth = scene && scene.synth;
+          if (synth && synth.ctx && synth.ctx.state === 'suspended') synth.ctx.resume();
+        } catch {}
+      }, {passive:true});
+      
       // Score & coins
       const SCORE_PER_SECOND = 5;
       const COIN_SPAWN_EVERY = 550;
@@ -288,7 +295,7 @@
         createMeta(){
           this.coins = parseInt(localStorage.getItem('csr_coins')||'0',10);
           this.upgradeLevel = parseInt(localStorage.getItem('csr_upgrade')||'0',10);
-          this.sfxOn = (localStorage.getItem('csr_sfx') ?? '1') === '1';
+          this.sfxOn = (localStorage.getItem('csr_sfx') ?? (IOS ? '0' : '1')) === '1';
           this.shakeLevel = parseInt(localStorage.getItem('csr_shake')||'2',10);
           this.highScore = parseInt(localStorage.getItem('csr_highscore')||'0',10);
           this.carryScore = parseInt(localStorage.getItem('csr_carryscore')||'0',10);
