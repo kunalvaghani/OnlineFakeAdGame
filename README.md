@@ -3,7 +3,7 @@
 An endless three-lane runner made with **Phaser 3**. Collect coins, choose +/× gates, dodge mines, grab power-ups, buy cosmetics, and defeat the boss. Includes safe soft-restart that avoids Phaser “sys” errors, reactive synth SFX/music, difficulty options, and persistent progress via `localStorage`.
 
 ## Live Demo
-After pushing, enable **GitHub Pages** (Settings → Pages → “Deploy from a branch”: `main` / `/root`). Your game is served from `index.html` at the repo root.
+**Live Demo:** https://kunalvaghani.github.io/OnlineFakeAdGame/
 
 ## Features
 - Phaser 3.60 (CDN) – no build step
