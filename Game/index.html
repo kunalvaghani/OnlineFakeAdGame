@@ -137,22 +137,73 @@
       startMusic(){ if(!this.enabled) return; this.unlock(); this.stopMusic(); this.musicOn=true; this.step=0; this.musicTimer=setInterval(()=>this._tick(), this.beatMs); }
       stopMusic(){ this.musicOn=false; if(this.musicTimer){ clearInterval(this.musicTimer); this.musicTimer=null; } }
       _tick(){
-        if(!this.enabled||!this.ctx||!this.musicOn) return;
-        const baseV=0.10*this.volume, hatV=(this.intensity>=1?0.05:0)*this.volume,
-              arpV=(this.intensity>=2?0.08:0)*this.volume, leadV=(this.intensity>=4?0.10:0)*this.volume;
-        const s=this.step%16;
-        if(s%4===0){ const bass=[45,45,43,40]; const note=bass[Math.floor(s/4)%bass.length];
-          this.tone(this.midiToHz(note), this.isBoss?0.18:0.16, 'square', baseV*1.1); if(this.isBoss) this.thud(80,.18,baseV*1.2);
-        } else if(this.intensity>=3 && s%2===0){ this.tone(this.midiToHz(45),0.08,'square',baseV*0.7); }
-        if(hatV>0) this.tone(8000,0.02,'square',hatV);
-        if(arpV>0 && s%2===0){ const seq=[69,72,76,72,69,72,77,72]; this.tone(this.midiToHz(seq[(s/2)%seq.length]), this.isBoss?0.11:0.10,'triangle',arpV); }
-        if(leadV>0 && s%4===0){ const lead=[81,84,81,79]; this.tone(this.midiToHz(lead[Math.floor(s/4)%lead.length]),0.12,'triangle',leadV); }
-        if(this.isBoss && s===0){ this.tone(520,0.10,'sawtooth',baseV*0.9); }
-        this.step=(this.step+1)%16;
+        if(!this.enabled||!this.ctx||!this.musicOn||this.paused) return;
+        // Check if context is suspended (iOS backgrounding)
+        if(this.ctx.state === 'suspended') return;
+        
+        try {
+          const baseV=0.10*this.volume, hatV=(this.intensity>=1?0.05:0)*this.volume,
+                arpV=(this.intensity>=2?0.08:0)*this.volume, leadV=(this.intensity>=4?0.10:0)*this.volume;
+          const s=this.step%16;
+          if(s%4===0){ 
+            const bass=[45,45,43,40]; 
+            const note=bass[Math.floor(s/4)%bass.length];
+            this.tone(this.midiToHz(note), this.isBoss?0.18:0.16, 'square', baseV*1.1); 
+            if(this.isBoss) this.thud(80,.18,baseV*1.2);
+          } else if(this.intensity>=3 && s%2===0){ 
+            this.tone(this.midiToHz(45),0.08,'square',baseV*0.7); 
+          }
+          if(hatV>0) this.tone(8000,0.02,'square',hatV);
+          if(arpV>0 && s%2===0){ 
+            const seq=[69,72,76,72,69,72,77,72]; 
+            this.tone(this.midiToHz(seq[(s/2)%seq.length]), this.isBoss?0.11:0.10,'triangle',arpV); 
+          }
+          if(leadV>0 && s%4===0){ 
+            const lead=[81,84,81,79]; 
+            this.tone(this.midiToHz(lead[Math.floor(s/4)%lead.length]),0.12,'triangle',leadV); 
+          }
+          if(this.isBoss && s===0){ 
+            this.tone(520,0.10,'sawtooth',baseV*0.9); 
+          }
+          this.step=(this.step+1)%16;
+        } catch (error) {
+          console.error('Music tick error:', error);
+          // Don't stop the music timer, just skip this tick
+        }
       }
     }
 
     /* ===================================================================== */
+
+    // Global diagnostics layer for debugging iOS issues
+    const DEBUG = false; // Set to true for debugging, false for production
+    let lastUpdateTime = 0;
+    let gameLoopAlive = true;
+
+    // Global error handlers
+    window.onerror = function(msg, file, line, col, error) {
+      const errorMsg = `JS Error: ${msg} at ${file}:${line}:${col}`;
+      console.error(errorMsg, error);
+      if (DEBUG) showDiagnosticOverlay(errorMsg);
+      return false;
+    };
+
+    window.addEventListener('unhandledrejection', function(event) {
+      const errorMsg = `Unhandled Promise: ${event.reason}`;
+      console.error(errorMsg);
+      if (DEBUG) showDiagnosticOverlay(errorMsg);
+    });
+
+    function showDiagnosticOverlay(msg) {
+      const overlay = document.getElementById('debug-overlay') || (() => {
+        const div = document.createElement('div');
+        div.id = 'debug-overlay';
+        div.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:rgba(255,0,0,0.9);color:white;padding:10px;font:12px monospace;z-index:9999;max-height:200px;overflow-y:auto;';
+        document.body.appendChild(div);
+        return div;
+      })();
+      overlay.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`;
+    }
 
     window.startGame = function(){
       if (!window.Phaser){ showHardError(); return; }
@@ -165,14 +216,21 @@
       const BOSS_TRIGGER_REMAINING=600, START_TROOPS_BASE=10, DPS_PER_TROOPER=.6, TELEGRAPH_TIME=800, BOSS_ATTACK_GAP=[1200,1800];
       const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      document.addEventListener('touchend', () => {
+      // Enhanced iOS audio unlock with multiple event types
+      const unlockAudio = () => {
         try {
           const g = window.__game;
           const scene = g && g.scene && g.scene.keys && g.scene.keys['game'];
           const synth = scene && scene.synth;
-          if (synth && synth.ctx && synth.ctx.state === 'suspended') synth.ctx.resume();
+          if (synth && synth.ctx && synth.ctx.state === 'suspended') {
+            synth.ctx.resume().catch(() => {}); // Ignore resume failures
+          }
         } catch {}
-      }, {passive:true});
+      };
+      
+      ['touchstart', 'touchend', 'click', 'keydown'].forEach(event => {
+        document.addEventListener(event, unlockAudio, {passive: true, once: false});
+      });
       
       // Score & coins
       const SCORE_PER_SECOND = 5;
@@ -380,8 +438,19 @@
         /* ---------- Haptics ---------- */
         haptic(scale='small'){
           if(!this.vibrateOn || !('vibrate' in navigator)) return;
-          const pat = scale==='tiny'?[10]: scale==='small'?[18]: scale==='med'?[26,10]: scale==='big'?[30,20,30]:[40,30,40];
-          navigator.vibrate(pat);
+          try {
+            const pat = scale==='tiny'?[10]: scale==='small'?[18]: scale==='med'?[26,10]: scale==='big'?[30,20,30]:[40,30,40];
+            // Use requestAnimationFrame to buffer vibrations on iOS
+            if (IOS) {
+              requestAnimationFrame(() => {
+                try {
+                  navigator.vibrate(pat);
+                } catch {}
+              });
+            } else {
+              navigator.vibrate(pat);
+            }
+          } catch {}
         }
 
         /* ---------- Equip helpers ---------- */
@@ -405,6 +474,39 @@
           const segTheme = this.segments?.[this.segIndex]?.theme || 'urban';
           this.applyTheme(segTheme);
           return true;
+        }
+
+        /* ---------- Debug Mode ---------- */
+        toggleDebugMode(){
+          if (!this.debugOverlay) return;
+          const isVisible = this.debugOverlay.visible;
+          this.debugOverlay.setVisible(!isVisible);
+          if (!isVisible) {
+            // Starting debug mode
+            this.debugUpdateInterval = setInterval(() => this.updateDebugInfo(), 100);
+          } else {
+            // Stopping debug mode
+            if (this.debugUpdateInterval) {
+              clearInterval(this.debugUpdateInterval);
+              this.debugUpdateInterval = null;
+            }
+          }
+        }
+        
+        updateDebugInfo(){
+          if (!this.debugOverlay || !this.debugOverlay.visible) return;
+          const fps = this.game.loop.actualFps.toFixed(1);
+          const timeSinceUpdate = Date.now() - lastUpdateTime;
+          const debugText = [
+            `FPS: ${fps}`,
+            `Game Loop: ${gameLoopAlive ? 'OK' : 'FAILED'}`,
+            `Last Update: ${timeSinceUpdate}ms ago`,
+            `Objects: G${this.gates.length} E${this.enemies.length} H${this.hazards.length} C${this.coinItems.length}`,
+            `Audio State: ${this.synth?.ctx?.state || 'N/A'}`,
+            `Playing: ${this.playing}, Paused: ${this.paused}`,
+            `Platform: ${navigator.userAgent.includes('iPhone') ? 'iOS' : 'Desktop'}`
+          ].join('\n');
+          this.debugOverlay.setText(debugText);
         }
 
         /* ---------- Create ---------- */
@@ -458,6 +560,15 @@
           this.bossBarFill=this.add.rectangle(GAME_W/2-120+1,70,0,10,0xff5a5a).setOrigin(0,.5).setAlpha(0);
           this.bossLabel=this.add.text(GAME_W/2,54,'BOSS',{fontFamily:'Verdana',fontSize:'14px',color:'#ffbebe'}).setOrigin(.5).setAlpha(0);
 
+          // Debug overlay (hidden by default)
+          this.debugOverlay = this.add.text(10, 100, '', {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#00ff00',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            padding: { x: 4, y: 4 }
+          }).setDepth(1000).setVisible(false);
+
           // Player visuals and textures
           this.player=this.add.container(GAME_W/2+LANES_X[this.laneIndex], PLAYER_Y);
           this.squadDots=this.add.group();
@@ -477,6 +588,8 @@
           this.input.keyboard.on('keydown-D',   ()=> (this.playing&&!this.paused)&&this.setLane(this.laneIndex+1));
           this.input.keyboard.on('keydown-P',   ()=> this.togglePause());
           this.input.keyboard.on('keydown-R', ()=>{ if(this.paused && this.playing){ this.safeRestart({autoStart:true}); } });
+          // Debug toggle (F12 key)
+          this.input.keyboard.on('keydown-F12', ()=> this.toggleDebugMode());
 
           this.input.on('pointerdown',p=>{
             if(!this.playing||this.paused)return;
@@ -915,12 +1028,41 @@
           const pool=this.pools[type];
           let obj=pool.length?pool.pop():creator();
           obj.setActive(true).setVisible(true).setAlpha(1).setScale(1);
+          // Clear any existing tweens on reused objects
+          if (this.tweens && obj) {
+            this.tweens.killTweensOf(obj);
+          }
           return obj;
         }
-        recycleGateCont(cont){ cont.setActive(false).setVisible(false); this.pools.gate.push(cont); }
-        recycleEnemyCont(cont){ cont.setActive(false).setVisible(false); this.pools.enemy.push(cont); }
-        recycleMineCont(cont){ cont.setActive(false).setVisible(false); cont.scale=1; this.pools.mine.push(cont); }
-        recycleCoinImg(img){ img.setActive(false).setVisible(false); this.pools.coin.push(img); }
+        recycleGateCont(cont){ 
+          if (!cont || !cont.active) return;
+          // Kill all tweens before recycling
+          if (this.tweens) this.tweens.killTweensOf(cont);
+          cont.setActive(false).setVisible(false); 
+          this.pools.gate.push(cont); 
+        }
+        recycleEnemyCont(cont){ 
+          if (!cont || !cont.active) return;
+          // Kill all tweens before recycling
+          if (this.tweens) this.tweens.killTweensOf(cont);
+          cont.setActive(false).setVisible(false); 
+          this.pools.enemy.push(cont); 
+        }
+        recycleMineCont(cont){ 
+          if (!cont || !cont.active) return;
+          // Kill all tweens before recycling
+          if (this.tweens) this.tweens.killTweensOf(cont);
+          cont.setActive(false).setVisible(false); 
+          cont.scale=1; 
+          this.pools.mine.push(cont); 
+        }
+        recycleCoinImg(img){ 
+          if (!img || !img.active) return;
+          // Kill all tweens before recycling
+          if (this.tweens) this.tweens.killTweensOf(img);
+          img.setActive(false).setVisible(false); 
+          this.pools.coin.push(img); 
+        }
 
         createGateContainer(){
           const c=this.add.container(0,-200).setActive(false).setVisible(false);
@@ -1005,55 +1147,190 @@
 
         /* ---------- Gameplay resolves ---------- */
         applyGate(g){
-          if(g.hit) return; g.hit=true;
-          if(g.type==='add'){ this.squad+=g.value; this.floatText('+'+g.value,0x2ad07a); this.synth.gate(); this.burst(g.container.x,PLAYER_Y-20,10,0x2ad07a); this.comboAdd(COMBO_GAIN.addGate); }
-          else { this.squad=Math.floor(this.squad*g.value); this.floatText('×'+g.value,0x2aa4d0); this.synth.mul(); this.burst(g.container.x,PLAYER_Y-20,10,0x2aa4d0); this.comboAdd(COMBO_GAIN.mulGate); }
-          this.doShake('tiny',90); this.refreshSquadUI();
-          this.tweens.add({targets:g.container, scale:1.25, alpha:0, duration:180, onComplete:()=>this.recycleGateCont(g.container)});
+          try {
+            if(g.hit) return; 
+            g.hit=true;
+            if(!g.container || !g.container.active) return;
+            
+            if(g.type==='add'){ 
+              this.squad+=g.value; 
+              this.floatText('+'+g.value,0x2ad07a); 
+              this.synth.gate(); 
+              this.burst(g.container.x,PLAYER_Y-20,10,0x2ad07a); 
+              this.comboAdd(COMBO_GAIN.addGate); 
+            } else { 
+              this.squad=Math.floor(this.squad*g.value); 
+              this.floatText('×'+g.value,0x2aa4d0); 
+              this.synth.mul(); 
+              this.burst(g.container.x,PLAYER_Y-20,10,0x2aa4d0); 
+              this.comboAdd(COMBO_GAIN.mulGate); 
+            }
+            this.doShake('tiny',90); 
+            this.refreshSquadUI();
+            
+            // Safe tween with validation
+            if (g.container && g.container.active && this.tweens) {
+              this.tweens.add({
+                targets: g.container, 
+                scale: 1.25, 
+                alpha: 0, 
+                duration: 180, 
+                onComplete: () => {
+                  if (g.container && g.container.active) {
+                    this.recycleGateCont(g.container);
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.error('applyGate error:', error);
+            if (DEBUG) showDiagnosticOverlay(`applyGate error: ${error.message}`);
+            // Fallback: just mark as hit to prevent re-processing
+            if (g) g.hit = true;
+          }
         }
         resolveBattle(e){
-          if(e.resolved) return; e.resolved=true;
-          if(this.consumeShield()){
-            this.doShake('small',120);
-            this.tweens.add({targets:e.container, scale:1.25, alpha:0, duration:220, onComplete:()=>this.recycleEnemyCont(e.container)});
-            return;
-          }
-          const armorMul=(e.kind==='armored')?1.35:1.0;
-          const enemyPower=Math.max(1,Math.floor(e.count*(this.enemyMul||1)*armorMul));
-          let survivors=this.squad - enemyPower;
+          try {
+            if(e.resolved) return; 
+            e.resolved=true;
+            if(!e.container || !e.container.active) return;
+            
+            if(this.consumeShield()){
+              this.doShake('small',120);
+              if (e.container && e.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: e.container, 
+                  scale: 1.25, 
+                  alpha: 0, 
+                  duration: 220, 
+                  onComplete: () => {
+                    if (e.container && e.container.active) {
+                      this.recycleEnemyCont(e.container);
+                    }
+                  }
+                });
+              }
+              return;
+            }
+            
+            const armorMul=(e.kind==='armored')?1.35:1.0;
+            const enemyPower=Math.max(1,Math.floor(e.count*(this.enemyMul||1)*armorMul));
+            let survivors=this.squad - enemyPower;
 
-          this.floatText(`${this.squad} vs ${e.count}${e.kind==='armored'?'🛡':''}`,0xffffff,-90);
-          this.synth.battle(); this.comboDamage('battle'); this.doShake(e.kind==='armored'?'med':'small',140); this.flashScreen(0xffffff,0.35,120);
+            this.floatText(`${this.squad} vs ${e.count}${e.kind==='armored'?'🛡':''}`,0xffffff,-90);
+            this.synth.battle(); 
+            this.comboDamage('battle'); 
+            this.doShake(e.kind==='armored'?'med':'small',140); 
+            this.flashScreen(0xffffff,0.35,120);
 
-          if(survivors>0){
-            if(e.kind==='bomber'){
-              const extra=Math.max(4,Math.floor(this.squad*0.15)+Phaser.Math.Between(2,6));
-              survivors=Math.max(0,survivors-extra);
-              this.floatText('-'+extra+' 💥',0xffa14e,-40); this.doShake('big',160); this.flashScreen(0xffffff,0.45,160);
-              this.burst(e.container.x,PLAYER_Y-20,16,0xffb36b,160,420);
-            } else { const tint=(e.kind==='armored')?0xff5a5a:0xff7b7b; this.burst(e.container.x,PLAYER_Y-20,12,tint); }
-            this.squad=survivors; this.refreshSquadUI();
-            this.tweens.add({targets:e.container, scale:1.25, alpha:0, duration:220, onComplete:()=>this.recycleEnemyCont(e.container)});
-          } else {
-            this.squad=0; this.refreshSquadUI(); this.doShake('huge',260);
-            this.playing=false; this.synth.lose(); this.synth.stopMusic();
-            this.time.delayedCall(180,()=>this.showResult(false));
+            if(survivors>0){
+              if(e.kind==='bomber'){
+                const extra=Math.max(4,Math.floor(this.squad*0.15)+Phaser.Math.Between(2,6));
+                survivors=Math.max(0,survivors-extra);
+                this.floatText('-'+extra+' 💥',0xffa14e,-40); 
+                this.doShake('big',160); 
+                this.flashScreen(0xffffff,0.45,160);
+                this.burst(e.container.x,PLAYER_Y-20,16,0xffb36b,160,420);
+              } else { 
+                const tint=(e.kind==='armored')?0xff5a5a:0xff7b7b; 
+                this.burst(e.container.x,PLAYER_Y-20,12,tint); 
+              }
+              this.squad=survivors; 
+              this.refreshSquadUI();
+              
+              // Safe tween with validation
+              if (e.container && e.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: e.container, 
+                  scale: 1.25, 
+                  alpha: 0, 
+                  duration: 220, 
+                  onComplete: () => {
+                    if (e.container && e.container.active) {
+                      this.recycleEnemyCont(e.container);
+                    }
+                  }
+                });
+              }
+            } else {
+              this.squad=0; 
+              this.refreshSquadUI(); 
+              this.doShake('huge',260);
+              this.playing=false; 
+              this.synth.lose(); 
+              this.synth.stopMusic();
+              this.time.delayedCall(180,()=>this.showResult(false));
+            }
+          } catch (error) {
+            console.error('resolveBattle error:', error);
+            if (DEBUG) showDiagnosticOverlay(`resolveBattle error: ${error.message}`);
+            // Fallback: mark as resolved to prevent re-processing
+            if (e) e.resolved = true;
           }
         }
         triggerMine(h){
-          if(h.exploded) return; h.exploded=true;
-          if(this.consumeShield()){
-            this.tweens.add({targets:h.gfx, scale:1.6, alpha:0, duration:240, onComplete:()=>this.recycleMineCont(h.container)});
-            this.doShake('small',120);
-            return;
+          try {
+            if(h.exploded) return; 
+            h.exploded=true;
+            if(!h.container || !h.container.active || !h.gfx) return;
+            
+            if(this.consumeShield()){
+              if (h.gfx && h.container && h.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: h.gfx, 
+                  scale: 1.6, 
+                  alpha: 0, 
+                  duration: 240, 
+                  onComplete: () => {
+                    if (h.container && h.container.active) {
+                      this.recycleMineCont(h.container);
+                    }
+                  }
+                });
+              }
+              this.doShake('small',120);
+              return;
+            }
+            
+            this.synth.mine();
+            
+            // Safe tween with validation
+            if (h.gfx && h.container && h.container.active && this.tweens) {
+              this.tweens.add({
+                targets: h.gfx, 
+                scale: 1.6, 
+                alpha: 0, 
+                duration: 240, 
+                onComplete: () => {
+                  if (h.container && h.container.active) {
+                    this.recycleMineCont(h.container);
+                  }
+                }
+              });
+            }
+            
+            const actualDmg=Math.max(1,Math.floor(h.dmg*(this.mineMul||1)));
+            this.squad=Math.max(0,this.squad-actualDmg); 
+            this.floatText('-'+actualDmg,0xd02a2a);
+            this.comboDamage('mine'); 
+            this.burst(this.player.x,this.player.y-20,14,0xff5a5a,140,360);
+            this.refreshSquadUI(); 
+            this.doShake('big',160); 
+            this.flashScreen(0xffffff,0.5,140);
+            
+            if(this.squad<=0){ 
+              this.doShake('huge',260); 
+              this.playing=false; 
+              this.synth.lose(); 
+              this.synth.stopMusic(); 
+              this.time.delayedCall(150,()=>this.showResult(false)); 
+            }
+          } catch (error) {
+            console.error('triggerMine error:', error);
+            if (DEBUG) showDiagnosticOverlay(`triggerMine error: ${error.message}`);
+            // Fallback: mark as exploded to prevent re-processing
+            if (h) h.exploded = true;
           }
-          this.synth.mine();
-          this.tweens.add({targets:h.gfx, scale:1.6, alpha:0, duration:240, onComplete:()=>this.recycleMineCont(h.container)});
-          const actualDmg=Math.max(1,Math.floor(h.dmg*(this.mineMul||1)));
-          this.squad=Math.max(0,this.squad-actualDmg); this.floatText('-'+actualDmg,0xd02a2a);
-          this.comboDamage('mine'); this.burst(this.player.x,this.player.y-20,14,0xff5a5a,140,360);
-          this.refreshSquadUI(); this.doShake('big',160); this.flashScreen(0xffffff,0.5,140);
-          if(this.squad<=0){ this.doShake('huge',260); this.playing=false; this.synth.lose(); this.synth.stopMusic(); this.time.delayedCall(150,()=>this.showResult(false)); }
         }
 
         refreshSquadUI(){ this.squadText.setText('Squad: '+this.squad); this.rebuildSquadDots(); }
@@ -1160,8 +1437,16 @@
         }
 
         update(_t,delta){
-          if(!this.playing||this.paused) return;
-          const dt=delta/1000, slowFactor=this.isSlowmo()?0.5:1.0;
+          try {
+            if(!this.playing||this.paused) return;
+            
+            // Update heartbeat for diagnostics
+            lastUpdateTime = Date.now();
+            gameLoopAlive = true;
+            
+            // Clamp delta to prevent issues with large time jumps (iOS background/foreground)
+            delta = Math.min(delta, 100); // Max 100ms delta
+            const dt=delta/1000, slowFactor=this.isSlowmo()?0.5:1.0;
           const bgSpeed=(this.bossPhase?30:this.scrollSpeed*this.scrollMult)*slowFactor;
           this.road.tilePositionY += bgSpeed*dt;
 
@@ -1177,64 +1462,180 @@
             this.distance += (this.scrollSpeed*slowFactor)*dt;
             const mv=(this.scrollSpeed*slowFactor)*dt;
 
-            for(const g of this.gates){
+            // Process gates with safe iteration
+            const gatesToRemove = [];
+            for(let i = 0; i < this.gates.length; i++){
+              const g = this.gates[i];
+              if (!g.container || !g.container.active) {
+                gatesToRemove.push(i);
+                continue;
+              }
+              
               g.container.y += mv;
               const near=Math.abs(g.container.y-PLAYER_Y)<34;
               if(!g.hit&&near&&g.lane===this.laneIndex) this.applyGate(g);
-              if(g.container.y>GAME_H+40) this.recycleGateCont(g.container);
+              if(g.container.y>GAME_H+40) {
+                this.recycleGateCont(g.container);
+                gatesToRemove.push(i);
+              }
             }
-            this.gates=this.gates.filter(g=>g.container.active);
+            // Remove in reverse order to maintain indices
+            for(let i = gatesToRemove.length - 1; i >= 0; i--) {
+              this.gates.splice(gatesToRemove[i], 1);
+            }
 
-            for(const e of this.enemies){
+            // Process enemies with safe iteration
+            const enemiesToRemove = [];
+            for(let i = 0; i < this.enemies.length; i++){
+              const e = this.enemies[i];
+              if (!e.container || !e.container.active) {
+                enemiesToRemove.push(i);
+                continue;
+              }
+              
               e.container.y += mv;
               if(e.kind==='zig' && !e.resolved && this.time.now >= (e.nextZigAt||0)){
-                let next=e.lane+(e.dir||1); if(next<0||next>2){ e.dir=-(e.dir||1); next=clamp(e.lane+e.dir,0,2); }
-                e.lane=next; const nx=GAME_W/2+LANES_X[e.lane]; this.tweens.add({targets:e.container,x:nx,duration:140,ease:'Sine.easeOut'}); e.nextZigAt=this.time.now+450;
+                let next=e.lane+(e.dir||1); 
+                if(next<0||next>2){ 
+                  e.dir=-(e.dir||1); 
+                  next=clamp(e.lane+e.dir,0,2); 
+                }
+                e.lane=next; 
+                const nx=GAME_W/2+LANES_X[e.lane]; 
+                if (this.tweens && e.container.active) {
+                  this.tweens.add({
+                    targets: e.container,
+                    x: nx,
+                    duration: 140,
+                    ease: 'Sine.easeOut'
+                  }); 
+                }
+                e.nextZigAt=this.time.now+450;
               }
               const near=Math.abs(e.container.y-PLAYER_Y)<34;
               if(!e.resolved&&near&&e.lane===this.laneIndex) this.resolveBattle(e);
-              if(e.container.y>GAME_H+40) this.recycleEnemyCont(e.container);
+              if(e.container.y>GAME_H+40) {
+                this.recycleEnemyCont(e.container);
+                enemiesToRemove.push(i);
+              }
             }
-            this.enemies=this.enemies.filter(e=>e.container.active);
+            // Remove in reverse order to maintain indices
+            for(let i = enemiesToRemove.length - 1; i >= 0; i--) {
+              this.enemies.splice(enemiesToRemove[i], 1);
+            }
 
-            for(const h of this.hazards){
+            // Process hazards with safe iteration
+            const hazardsToRemove = [];
+            for(let i = 0; i < this.hazards.length; i++){
+              const h = this.hazards[i];
+              if (!h.container || !h.container.active) {
+                hazardsToRemove.push(i);
+                continue;
+              }
+              
               h.container.y += mv;
               const near=Math.abs(h.container.y-PLAYER_Y)<24;
               if(!h.exploded&&near&&h.lane===this.laneIndex) this.triggerMine(h);
-              if(h.container.y>GAME_H+40) this.recycleMineCont(h.container);
+              if(h.container.y>GAME_H+40) {
+                this.recycleMineCont(h.container);
+                hazardsToRemove.push(i);
+              }
             }
-            this.hazards=this.hazards.filter(h=>h.container.active);
+            // Remove in reverse order to maintain indices
+            for(let i = hazardsToRemove.length - 1; i >= 0; i--) {
+              this.hazards.splice(hazardsToRemove[i], 1);
+            }
 
-            for(const c of this.coinItems){
-              if(this.isMagnet()){
-                const dx=this.player.x-c.img.x, dy=this.player.y-20-c.img.y, dist=Math.hypot(dx,dy);
-                if(dist<MAGNET_RADIUS){ const step=MAGNET_PULL_PER_SEC*dt; c.img.x += (dx/dist)*step; c.img.y += (dy/dist)*step; }
+            // Process coins with safe iteration and coin pickup error handling
+            const coinsToRemove = [];
+            for(let i = 0; i < this.coinItems.length; i++){
+              const c = this.coinItems[i];
+              if (!c.img || !c.img.active || c.picked) {
+                coinsToRemove.push(i);
+                continue;
               }
-              c.img.y += mv;
-              const nearY=Math.abs(c.img.y-PLAYER_Y)<22;
-              const distToPlayer=Math.hypot(c.img.x-this.player.x, c.img.y-(this.player.y-10));
-              const magnetGrab=this.isMagnet() && distToPlayer<40;
-              if(!c.picked && ((nearY && c.lane===this.laneIndex) || magnetGrab)){
-                c.picked=true; this.runPickupCoins += 1; this.runScore += 10*this.comboMultiplier;
-                this.comboAdd(COMBO_GAIN.coin); this.synth.coin();
-                this.burst(c.img.x,c.img.y,10,0xfff0a0,140,300); this.doShake('tiny',80);
-                this.recycleCoinImg(c.img);
+              
+              try {
+                if(this.isMagnet()){
+                  const dx=this.player.x-c.img.x, dy=this.player.y-20-c.img.y;
+                  const dist=Math.hypot(dx,dy);
+                  if(dist>0 && dist<MAGNET_RADIUS){ 
+                    const step=MAGNET_PULL_PER_SEC*dt; 
+                    c.img.x += (dx/dist)*step; 
+                    c.img.y += (dy/dist)*step; 
+                  }
+                }
+                c.img.y += mv;
+                const nearY=Math.abs(c.img.y-PLAYER_Y)<22;
+                const distToPlayer=Math.hypot(c.img.x-this.player.x, c.img.y-(this.player.y-10));
+                const magnetGrab=this.isMagnet() && distToPlayer<40;
+                
+                if(!c.picked && ((nearY && c.lane===this.laneIndex) || magnetGrab)){
+                  c.picked=true; 
+                  this.runPickupCoins += 1; 
+                  this.runScore += 10*this.comboMultiplier;
+                  this.comboAdd(COMBO_GAIN.coin); 
+                  this.synth.coin();
+                  this.burst(c.img.x,c.img.y,10,0xfff0a0,140,300); 
+                  this.doShake('tiny',80);
+                  this.recycleCoinImg(c.img);
+                  coinsToRemove.push(i);
+                }
+                else if(c.img.y>GAME_H+40){ 
+                  this.recycleCoinImg(c.img); 
+                  c.picked=true; 
+                  coinsToRemove.push(i);
+                }
+              } catch (error) {
+                console.error('Coin processing error:', error);
+                if (DEBUG) showDiagnosticOverlay(`Coin error: ${error.message}`);
+                // Mark for removal to prevent further issues
+                c.picked = true;
+                coinsToRemove.push(i);
               }
-              if(c.img.y>GAME_H+40){ this.recycleCoinImg(c.img); c.picked=true; }
             }
-            this.coinItems=this.coinItems.filter(c=>c.img.active && !c.picked);
+            // Remove in reverse order to maintain indices
+            for(let i = coinsToRemove.length - 1; i >= 0; i--) {
+              this.coinItems.splice(coinsToRemove[i], 1);
+            }
 
-            for(const p of this.powerups){
-              p.img.y += mv;
-              const near=Math.abs(p.img.y-PLAYER_Y)<24;
-              if(!p.picked && near && p.lane===this.laneIndex){
-                p.picked=true; this.givePowerup(p.kind);
-                this.burst(p.img.x,p.img.y,10,p.kind==='shield'?0x8ad4ff:(p.kind==='slow'?0xff9b3a:0x39d2ff),140,300);
-                this.doShake('small',100); p.img.destroy();
+            // Process powerups with safe iteration
+            const powerupsToRemove = [];
+            for(let i = 0; i < this.powerups.length; i++){
+              const p = this.powerups[i];
+              if (!p.img || !p.img.active || p.picked) {
+                powerupsToRemove.push(i);
+                continue;
               }
-              if(p.img.y>GAME_H+40){ p.img.destroy(); p.picked=true; }
+              
+              try {
+                p.img.y += mv;
+                const near=Math.abs(p.img.y-PLAYER_Y)<24;
+                if(!p.picked && near && p.lane===this.laneIndex){
+                  p.picked=true; 
+                  this.givePowerup(p.kind);
+                  this.burst(p.img.x,p.img.y,10,p.kind==='shield'?0x8ad4ff:(p.kind==='slow'?0xff9b3a:0x39d2ff),140,300);
+                  this.doShake('small',100); 
+                  p.img.destroy();
+                  powerupsToRemove.push(i);
+                }
+                else if(p.img.y>GAME_H+40){ 
+                  p.img.destroy(); 
+                  p.picked=true; 
+                  powerupsToRemove.push(i);
+                }
+              } catch (error) {
+                console.error('Powerup processing error:', error);
+                if (DEBUG) showDiagnosticOverlay(`Powerup error: ${error.message}`);
+                // Mark for removal to prevent further issues
+                p.picked = true;
+                powerupsToRemove.push(i);
+              }
             }
-            this.powerups=this.powerups.filter(p=>p.img.active && !p.picked);
+            // Remove in reverse order to maintain indices
+            for(let i = powerupsToRemove.length - 1; i >= 0; i--) {
+              this.powerups.splice(powerupsToRemove[i], 1);
+            }
 
             this._coinSpawnAcc += delta;
             if(this._coinSpawnAcc >= this.coinEvery && this.distance < LEVEL_LENGTH-800){
@@ -1270,6 +1671,16 @@
               if(this.boss) this.tweens.add({targets:this.boss,scale:1.1,alpha:0,duration:250,onComplete:()=>this.boss.destroy()});
               this.time.delayedCall(220,()=>this.showResult(true));
             }
+          }
+          } catch (error) {
+            console.error('Update loop error:', error);
+            if (DEBUG) showDiagnosticOverlay(`Update error: ${error.message}`);
+            // Try to recover by stopping gameplay to prevent further errors
+            gameLoopAlive = false;
+            this.playing = false;
+            this.paused = true;
+            // Show error overlay even in production for critical errors
+            showDiagnosticOverlay(`Game loop stopped due to error: ${error.message}`);
           }
         }
 
