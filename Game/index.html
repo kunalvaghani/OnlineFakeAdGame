@@ -252,6 +252,277 @@
       const COMBO_GAIN={ coin:18, addGate:20, mulGate:28 };
       const COMBO_HIT_PENALTY={ mine:55, boss:55, battle:40 };
 
+      // Squad Specialization System
+      const SQUAD_TYPES = {
+        assault: { 
+          name: 'Assault Squad', 
+          dmgMult: 1.2, 
+          speedMult: 1.0, 
+          special: 'rampage_mode',
+          description: 'High damage specialists',
+          price: 0,
+          color: 0xff6b6b
+        },
+        stealth: { 
+          name: 'Stealth Squad', 
+          dmgMult: 0.8, 
+          speedMult: 1.3, 
+          special: 'phase_through',
+          description: 'Fast and evasive',
+          price: 150,
+          color: 0x4ecdc4
+        },
+        heavy: { 
+          name: 'Heavy Squad', 
+          dmgMult: 1.5, 
+          speedMult: 0.8, 
+          special: 'shield_wall',
+          description: 'Tank damage dealers',
+          price: 200,
+          color: 0x95a5a6
+        },
+        medic: { 
+          name: 'Medic Squad', 
+          dmgMult: 0.9, 
+          speedMult: 1.0, 
+          special: 'auto_heal',
+          description: 'Self-healing support',
+          price: 180,
+          color: 0x2ecc71
+        },
+        engineer: { 
+          name: 'Engineer Squad', 
+          dmgMult: 1.0, 
+          speedMult: 1.0, 
+          special: 'deploy_turret',
+          description: 'Utility and support',
+          price: 250,
+          color: 0xf39c12
+        }
+      };
+
+      const SPECIAL_ABILITIES = {
+        rampage_mode: { name: 'Rampage', duration: 10000, cooldown: 45000, effect: 'double_damage' },
+        phase_through: { name: 'Phase', duration: 0, cooldown: 30000, effect: 'ignore_next_3' },
+        shield_wall: { name: 'Shield Wall', duration: 15000, cooldown: 60000, effect: 'absorb_5_hits' },
+        auto_heal: { name: 'Auto Heal', duration: 20000, cooldown: 40000, effect: 'regen_squad' },
+        deploy_turret: { name: 'Turret', duration: 15000, cooldown: 50000, effect: 'auto_shoot' }
+      };
+      
+      const WEATHER_EFFECTS = {
+        clear: { name: 'Clear', visMult: 1.0, speedMult: 1.0, color: null, particles: null },
+        rain: { name: 'Rain', visMult: 0.8, speedMult: 0.9, color: 0x4a6fa5, particles: 'rain' },
+        fog: { name: 'Fog', visMult: 0.5, speedMult: 1.0, color: 0x95a5a6, particles: 'fog' },
+        sandstorm: { name: 'Sandstorm', visMult: 0.4, speedMult: 0.7, color: 0xd68910, particles: 'sand' },
+        snow: { name: 'Snow', visMult: 0.7, speedMult: 0.8, color: 0xaed6f1, particles: 'snow' }
+      };
+      
+      const CAMPAIGN_MISSIONS = {
+        tutorial: { 
+          name: 'Training Grounds', 
+          description: 'Learn the basics and survive for 2 minutes',
+          objective: 'survive_time',
+          target: 120,
+          reward: 50,
+          unlocks: 'city_outskirts',
+          weather: 'clear',
+          difficulty: 0.5
+        },
+        city_outskirts: {
+          name: 'City Outskirts',
+          description: 'Clear the infected zone - defeat 25 enemies',
+          objective: 'defeat_enemies', 
+          target: 25,
+          reward: 75,
+          unlocks: 'industrial_district',
+          weather: 'fog',
+          difficulty: 0.8
+        },
+        industrial_district: {
+          name: 'Industrial District', 
+          description: 'Navigate through the factory complex - collect 150 resources',
+          objective: 'collect_coins',
+          target: 150,
+          reward: 100,
+          unlocks: 'military_base',
+          weather: 'sandstorm',
+          difficulty: 1.0
+        },
+        military_base: {
+          name: 'Military Base',
+          description: 'Infiltrate the base without taking damage',
+          objective: 'no_damage',
+          target: 1,
+          reward: 125,
+          unlocks: 'final_assault',
+          weather: 'rain',
+          difficulty: 1.2
+        },
+        final_assault: {
+          name: 'Final Assault',
+          description: 'End the threat - defeat the final boss',
+          objective: 'defeat_boss',
+          target: 1,
+          reward: 200,
+          unlocks: null,
+          weather: 'clear',
+          difficulty: 1.5
+        }
+      };
+      
+      const BASE_FACILITIES = {
+        armory: {
+          name: 'Armory',
+          description: 'Increases weapon damage',
+          maxLevel: 5,
+          baseCost: 100,
+          costMultiplier: 1.5,
+          effect: 'weapon_damage',
+          bonus: 0.15, // 15% per level
+          icon: '🗡️'
+        },
+        medical: {
+          name: 'Medical Bay',
+          description: 'Increases starting squad size',
+          maxLevel: 5,
+          baseCost: 120,
+          costMultiplier: 1.4,
+          effect: 'starting_squad',
+          bonus: 5, // +5 squad per level
+          icon: '⚕️'
+        },
+        workshop: {
+          name: 'Workshop',
+          description: 'Reduces equipment costs',
+          maxLevel: 3,
+          baseCost: 150,
+          costMultiplier: 1.6,
+          effect: 'cost_reduction',
+          bonus: 0.20, // 20% cost reduction per level
+          icon: '🔧'
+        },
+        research: {
+          name: 'Research Lab',
+          description: 'Increases gadget charges',
+          maxLevel: 4,
+          baseCost: 200,
+          costMultiplier: 1.5,
+          effect: 'gadget_charges',
+          bonus: 1, // +1 charge per level
+          icon: '🧪'
+        },
+        training: {
+          name: 'Training Grounds',
+          description: 'Reduces special ability cooldowns',
+          maxLevel: 3,
+          baseCost: 180,
+          costMultiplier: 1.7,
+          effect: 'cooldown_reduction',
+          bonus: 0.25, // 25% cooldown reduction per level
+          icon: '🎯'
+        }
+      };
+      
+      const COMBAT_MECHANICS = {
+        critical: {
+          chance: 0.15, // 15% base critical chance
+          multiplier: 2.0, // 2x damage on critical
+          combos: {
+            streak3: { threshold: 3, bonus: 0.05 }, // +5% crit chance after 3 consecutive crits
+            streak5: { threshold: 5, bonus: 0.10 }, // +10% crit chance after 5 consecutive crits
+            streak10: { threshold: 10, bonus: 0.20 } // +20% crit chance after 10 consecutive crits
+          }
+        },
+        formation: {
+          small: { threshold: 15, bonus: 1.1, name: 'Tight Formation' }, // 10% damage bonus for small squads
+          medium: { threshold: 30, bonus: 1.2, name: 'Battle Line' }, // 20% damage bonus for medium squads  
+          large: { threshold: 50, bonus: 1.3, name: 'War Host' } // 30% damage bonus for large squads
+        },
+        precision: {
+          baseAccuracy: 0.85, // 85% base hit chance
+          weatherPenalty: 0.15, // -15% accuracy in bad weather
+          movingPenalty: 0.10, // -10% accuracy when switching lanes
+          comboCHARM: 0.02 // +2% accuracy per combo level
+        }
+      };
+
+      // Achievement & Mission System
+      const ACHIEVEMENTS = {
+        first_coin: { name: 'First Coin', description: 'Collect your first coin', reward: 10, icon: '🪙' },
+        combo_master: { name: 'Combo Master', description: 'Reach x3.0 combo multiplier', reward: 25, icon: '🔥' },
+        boss_slayer: { name: 'Boss Slayer', description: 'Defeat your first boss', reward: 50, icon: '👑' },
+        speed_demon: { name: 'Speed Demon', description: 'Complete a run in under 3 minutes', reward: 30, icon: '⚡' },
+        collector: { name: 'Collector', description: 'Collect 100 coins in one run', reward: 40, icon: '💰' },
+        survivor: { name: 'Survivor', description: 'Survive for 5 minutes', reward: 35, icon: '🛡️' },
+        specialist: { name: 'Specialist', description: 'Unlock 3 different squad types', reward: 100, icon: '🎖️' },
+        perfectionist: { name: 'Perfectionist', description: 'Complete a run without taking damage', reward: 75, icon: '💎' }
+      };
+
+      const MISSION_TYPES = {
+        survive: { name: 'Survive', description: 'Survive for X seconds' },
+        collect_coins: { name: 'Coin Collector', description: 'Collect X coins' },
+        reach_combo: { name: 'Combo Streak', description: 'Reach x{X} combo multiplier' },
+        defeat_enemies: { name: 'Enemy Hunter', description: 'Defeat X enemies' },
+        use_ability: { name: 'Special Forces', description: 'Use special ability X times' },
+        perfect_run: { name: 'Perfect Run', description: 'Complete without taking damage' }
+      };
+
+      function generateDailyMissions() {
+        const missions = [];
+        const types = Object.keys(MISSION_TYPES);
+        
+        for(let i = 0; i < 3; i++) {
+          const type = types[Math.floor(Math.random() * types.length)];
+          let target, reward;
+          
+          switch(type) {
+            case 'survive': target = 120 + i * 60; reward = 15 + i * 10; break;
+            case 'collect_coins': target = 20 + i * 15; reward = 20 + i * 5; break;
+            case 'reach_combo': target = 2.0 + i * 0.5; reward = 25 + i * 10; break;
+            case 'defeat_enemies': target = 5 + i * 5; reward = 15 + i * 5; break;
+            case 'use_ability': target = 3 + i * 2; reward = 20 + i * 5; break;
+            case 'perfect_run': target = 1; reward = 50; break;
+          }
+          
+          missions.push({
+            id: `daily_${i}`,
+            type: type,
+            target: target,
+            progress: 0,
+            reward: reward,
+            completed: false,
+            description: MISSION_TYPES[type].description.replace('X', target)
+          });
+        }
+        
+        return missions;
+      }
+
+      // Equipment Loadout System
+      const EQUIPMENT = {
+        weapons: {
+          assault_rifle: { name: 'Assault Rifle', dmg: 1.0, rof: 1.0, accuracy: 0.9, price: 0, description: 'Balanced weapon' },
+          sniper_rifle: { name: 'Sniper Rifle', dmg: 1.8, rof: 0.5, accuracy: 1.0, price: 80, description: 'High damage, slow rate' },
+          shotgun: { name: 'Shotgun', dmg: 1.4, rof: 0.7, accuracy: 0.7, price: 60, description: 'Close range devastation' },
+          machine_gun: { name: 'Machine Gun', dmg: 0.8, rof: 1.5, accuracy: 0.8, price: 100, description: 'High rate of fire' },
+          plasma_cannon: { name: 'Plasma Cannon', dmg: 2.2, rof: 0.3, accuracy: 0.9, price: 150, description: 'Experimental energy weapon' }
+        },
+        armor: {
+          light: { name: 'Light Armor', speed: 1.2, protection: 0.8, price: 0, description: 'Fast and agile' },
+          medium: { name: 'Medium Armor', speed: 1.0, protection: 1.0, price: 40, description: 'Balanced protection' },
+          heavy: { name: 'Heavy Armor', speed: 0.8, protection: 1.4, price: 80, description: 'Maximum protection' },
+          reactive: { name: 'Reactive Armor', speed: 0.9, protection: 1.2, price: 120, description: 'Explosive reactive plates' },
+          stealth: { name: 'Stealth Suit', speed: 1.3, protection: 0.7, price: 100, description: 'Enhanced mobility' }
+        },
+        gadgets: {
+          medkit: { name: 'Medical Kit', effect: 'auto_heal', charges: 3, price: 0, description: 'Emergency healing' },
+          shield_gen: { name: 'Shield Generator', effect: 'shield_boost', charges: 2, price: 60, description: 'Portable shields' },
+          emp_grenade: { name: 'EMP Grenade', effect: 'disable_electronics', charges: 2, price: 80, description: 'Disables enemy tech' },
+          smoke_grenade: { name: 'Smoke Grenade', effect: 'concealment', charges: 3, price: 50, description: 'Temporary invisibility' },
+          ammo_pack: { name: 'Ammo Pack', effect: 'damage_boost', charges: 4, price: 70, description: 'Increased firepower' }
+        }
+      };
+
       // Power-ups
       const PU_SPAWN_EVERY = 1500, PU_SPAWN_JITTER=400;
       const PU_WEIGHT = { magnet: 0.45, shield: 0.35, slow: 0.20 };
@@ -364,10 +635,32 @@
           this.vibrateOn = (localStorage.getItem('csr_vibe')||'1')==='1';
           try { this.playersOwned = new Set(JSON.parse(localStorage.getItem('csr_shop_players_owned')||'["default"]')); } catch { this.playersOwned = new Set(['default']); }
           try { this.themesOwned  = new Set(JSON.parse(localStorage.getItem('csr_shop_themes_owned') ||'["default"]')); } catch { this.themesOwned  = new Set(['default']); }
+          try { this.squadsOwned  = new Set(JSON.parse(localStorage.getItem('csr_shop_squads_owned') ||'["assault"]')); } catch { this.squadsOwned  = new Set(['assault']); }
+          try { this.achievementsUnlocked = new Set(JSON.parse(localStorage.getItem('csr_achievements')||'[]')); } catch { this.achievementsUnlocked = new Set(); }
+          try { this.equipmentOwned = JSON.parse(localStorage.getItem('csr_equipment_owned')||'{"weapons":["assault_rifle"],"armor":["light"],"gadgets":["medkit"]}'); } catch { this.equipmentOwned = {weapons:["assault_rifle"],armor:["light"],gadgets:["medkit"]}; }
           this.equipPlayer = localStorage.getItem('csr_eq_player') || 'default';
           this.equipTheme  = localStorage.getItem('csr_eq_theme')  || 'default';
+          this.equipSquad  = localStorage.getItem('csr_eq_squad')  || 'assault';
+          this.equipWeapon = localStorage.getItem('csr_eq_weapon') || 'assault_rifle';
+          this.equipArmor  = localStorage.getItem('csr_eq_armor')  || 'light';
+          this.equipGadget = localStorage.getItem('csr_eq_gadget') || 'medkit';
+          try { this.campaignUnlocked = new Set(JSON.parse(localStorage.getItem('csr_campaign_unlocked')||'["tutorial"]')); } catch { this.campaignUnlocked = new Set(['tutorial']); }
+          try { this.baseFacilities = JSON.parse(localStorage.getItem('csr_base_facilities')||'{}'); } catch { this.baseFacilities = {}; }
+          Object.keys(BASE_FACILITIES).forEach(key => { if(!(key in this.baseFacilities)) this.baseFacilities[key] = 0; });
+          
+          // Daily missions
+          this.lastMissionDate = localStorage.getItem('csr_last_mission_date') || '';
+          const today = new Date().toDateString();
+          if(this.lastMissionDate !== today) {
+            this.dailyMissions = generateDailyMissions();
+            localStorage.setItem('csr_daily_missions', JSON.stringify(this.dailyMissions));
+            localStorage.setItem('csr_last_mission_date', today);
+          } else {
+            try { this.dailyMissions = JSON.parse(localStorage.getItem('csr_daily_missions')||'[]'); } catch { this.dailyMissions = generateDailyMissions(); }
+          }
           if(!this.playersOwned.has(this.equipPlayer)) this.equipPlayer='default';
           if(!this.themesOwned.has(this.equipTheme))   this.equipTheme='default';
+          if(!this.squadsOwned.has(this.equipSquad))   this.equipSquad='assault';
           this.synth=new TinySynth(); this.synth.setEnabled(this.sfxOn); this.synth.setVolume(this.volume);
           this._skinTexNames = this.game.registry.get('skinTexNames') || {default:{soldier:'soldierDot',leader:'leader'}};
         }
@@ -384,8 +677,18 @@
           localStorage.setItem('csr_vibe', this.vibrateOn ? '1' : '0');
           localStorage.setItem('csr_shop_players_owned', JSON.stringify([...this.playersOwned]));
           localStorage.setItem('csr_shop_themes_owned',  JSON.stringify([...this.themesOwned]));
+          localStorage.setItem('csr_shop_squads_owned',  JSON.stringify([...this.squadsOwned]));
+          localStorage.setItem('csr_achievements', JSON.stringify([...this.achievementsUnlocked]));
+          localStorage.setItem('csr_daily_missions', JSON.stringify(this.dailyMissions));
+          localStorage.setItem('csr_equipment_owned', JSON.stringify(this.equipmentOwned));
           localStorage.setItem('csr_eq_player', this.equipPlayer);
           localStorage.setItem('csr_eq_theme',  this.equipTheme);
+          localStorage.setItem('csr_eq_squad',  this.equipSquad);
+          localStorage.setItem('csr_eq_weapon', this.equipWeapon);
+          localStorage.setItem('csr_eq_armor',  this.equipArmor);
+          localStorage.setItem('csr_eq_gadget', this.equipGadget);
+          localStorage.setItem('csr_campaign_unlocked', JSON.stringify(Array.from(this.campaignUnlocked || new Set(['tutorial']))));
+          localStorage.setItem('csr_base_facilities', JSON.stringify(this.baseFacilities || {}));
         }
         applyDifficulty(){ const p = DIFF_PRESETS[this.difficulty] || DIFF_PRESETS.normal;
           this.scrollSpeed=p.scrollSpeed; this.enemyMul=p.enemyMul; this.mineMul=p.mineMul; this.bossHPFactor=p.bossHPFactor; }
@@ -410,10 +713,11 @@
         /* ---------- Per-run state ---------- */
         resetState(){
           const lvl=this?.upgradeLevel??0;
-          this.startTroops=START_TROOPS_BASE+(lvl*2);
+          const medicalBonus = (this.baseFacilities?.medical || 0) * BASE_FACILITIES.medical.bonus;
+          this.startTroops=START_TROOPS_BASE+(lvl*2)+medicalBonus;
           this.squad=this.startTroops;
           this.distance=0; this.laneIndex=1;
-          this.gates=[]; this.enemies=[]; this.hazards=[]; this.coinItems=[]; this.powerups=[];
+          this.gates=[]; this.enemies=[]; this.hazards=[]; this.coinItems=[]; this.powerups=[]; this.projectiles=[];
           this.finished=false; this.dead=false; this.playing=false; this.paused=false;
 
           this.finishShown=false; this.bossPhase=false; this.boss=null;
@@ -427,7 +731,53 @@
 
           this._bossFlashThreshold=null;
 
-          this.pools = { gate:[], enemy:[], mine:[], coin:[] };
+          // Squad specialization state
+          this.currentSquadType = SQUAD_TYPES[this.equipSquad] || SQUAD_TYPES.assault;
+          this.specialAbilityReady = true;
+          this.specialCooldownUntil = 0;
+          this.specialActiveUntil = 0;
+          this.phaseCharges = 0; // For stealth squad
+          this.shieldHits = 0; // For heavy squad
+          this.turretActiveUntil = 0; // For engineer squad
+          
+          // Equipment effect timers
+          this.coinBoostUntil = 0;
+          this.slowEnemiesUntil = 0;
+          this.healingRate = 0; // For medic squad
+          
+          // Weather system
+          this.currentWeather = 'clear';
+          this.weatherChangeAt = 0; // Will be set properly in create()
+          this.weatherParticles = null;
+          this.weatherOverlay = null;
+          
+          // Campaign mode
+          this.campaignMode = false;
+          this.currentMission = null;
+          this.missionProgress = 0;
+          this.missionTarget = 0;
+          
+          // Advanced combat mechanics
+          this.criticalStreak = 0;
+          this.lastLaneSwitch = 0;
+          this.currentFormation = null;
+
+          // Equipment loadout effects
+          this.currentWeapon = EQUIPMENT.weapons[this.equipWeapon] || EQUIPMENT.weapons.assault_rifle;
+          this.currentArmor = EQUIPMENT.armor[this.equipArmor] || EQUIPMENT.armor.light;
+          this.currentGadget = EQUIPMENT.gadgets[this.equipGadget] || EQUIPMENT.gadgets.medkit;
+          const researchBonus = (this.baseFacilities?.research || 0) * BASE_FACILITIES.research.bonus;
+          this.gadgetCharges = (this.currentGadget.charges || 0) + researchBonus;
+
+          // Mission tracking for this run
+          this.runSurvivalTime = 0;
+          this.runEnemiesDefeated = 0;
+          this.runAbilityUses = 0;
+          this.runTookDamage = false;
+          this.runStartTime = Date.now();
+          this.lastSurvivalCheck = 0; // Will be set properly in create()
+
+          this.pools = { gate:[], enemy:[], mine:[], coin:[], projectile:[] };
 
           this.soldierTexKey = 'soldierDot';
           this.leaderTexKey  = 'leader';
@@ -475,6 +825,15 @@
           this.applyTheme(segTheme);
           return true;
         }
+        equipSquadType(key){
+          if(!this.squadsOwned.has(key)) return false;
+          this.equipSquad = key;
+          this.currentSquadType = SQUAD_TYPES[key];
+          this.saveMeta();
+          this.updateSpecialAbilityUI();
+          this.updateGadgetUI();
+          return true;
+        }
 
         /* ---------- Debug Mode ---------- */
         toggleDebugMode(){
@@ -504,14 +863,454 @@
             `Objects: G${this.gates.length} E${this.enemies.length} H${this.hazards.length} C${this.coinItems.length}`,
             `Audio State: ${this.synth?.ctx?.state || 'N/A'}`,
             `Playing: ${this.playing}, Paused: ${this.paused}`,
+            `Squad: ${this.currentSquadType.name}`,
             `Platform: ${navigator.userAgent.includes('iPhone') ? 'iOS' : 'Desktop'}`
           ].join('\n');
           this.debugOverlay.setText(debugText);
         }
 
+        /* ---------- Squad Special Abilities ---------- */
+        activateSpecialAbility(){
+          if(!this.playing || this.paused) return;
+          if(this.time.now < this.specialCooldownUntil) return;
+          
+          const ability = SPECIAL_ABILITIES[this.currentSquadType.special];
+          if(!ability) return;
+          
+          this.synth.power();
+          const trainingBonus = 1.0 - ((this.baseFacilities?.training || 0) * BASE_FACILITIES.training.bonus);
+          this.specialCooldownUntil = this.time.now + (ability.cooldown * trainingBonus);
+          this.runAbilityUses++;
+          this.updateMissionProgress('use_ability');
+          
+          switch(ability.effect) {
+            case 'double_damage':
+              this.specialActiveUntil = this.time.now + ability.duration;
+              this.floatText('RAMPAGE!', 0xff6b6b, -80);
+              this.flashScreen(0xff6b6b, 0.3, 200);
+              break;
+              
+            case 'ignore_next_3':
+              this.phaseCharges = 3;
+              this.floatText('PHASE MODE!', 0x4ecdc4, -80);
+              this.flashScreen(0x4ecdc4, 0.3, 200);
+              break;
+              
+            case 'absorb_5_hits':
+              this.shieldHits = 5;
+              this.specialActiveUntil = this.time.now + ability.duration;
+              this.floatText('SHIELD WALL!', 0x95a5a6, -80);
+              this.flashScreen(0x95a5a6, 0.3, 200);
+              break;
+              
+            case 'regen_squad':
+              this.healingRate = 2; // 2 squad per second
+              this.specialActiveUntil = this.time.now + ability.duration;
+              this.floatText('AUTO HEAL!', 0x2ecc71, -80);
+              this.flashScreen(0x2ecc71, 0.3, 200);
+              break;
+              
+            case 'auto_shoot':
+              this.turretActiveUntil = this.time.now + ability.duration;
+              this.floatText('TURRET DEPLOYED!', 0xf39c12, -80);
+              this.flashScreen(0xf39c12, 0.3, 200);
+              break;
+          }
+          
+          this.updateSpecialAbilityUI();
+        }
+        
+        useGadget(){
+          if(!this.playing || this.paused) return;
+          if(this.gadgetCharges <= 0) return;
+          
+          this.gadgetCharges--;
+          this.synth.power();
+          
+          const gadget = this.currentGadget;
+          switch(gadget.effect) {
+            case 'auto_heal':
+              const healAmount = Math.floor(this.squad * 0.5);
+              this.squad += healAmount;
+              this.floatText(`+${healAmount} SQUAD!`, 0x2ecc71, -80);
+              this.flashScreen(0x2ecc71, 0.3, 150);
+              break;
+              
+            case 'shield_boost':
+              this.shieldHits = (this.shieldHits || 0) + 5;
+              this.floatText('SHIELD BOOST!', 0x3498db, -80);
+              this.flashScreen(0x3498db, 0.3, 150);
+              break;
+              
+            case 'disable_electronics':
+              this.slowEnemiesUntil = this.time.now + 15000;
+              this.floatText('EMP BLAST!', 0x9b59b6, -80);
+              this.flashScreen(0x9b59b6, 0.3, 150);
+              break;
+              
+            case 'concealment':
+              this.phaseCharges = (this.phaseCharges || 0) + 3;
+              this.floatText('SMOKE SCREEN!', 0x95a5a6, -80);
+              this.flashScreen(0x95a5a6, 0.3, 150);
+              break;
+              
+            case 'damage_boost':
+              this.specialCooldownUntil = 0; // Reset special ability cooldown
+              this.floatText('AMMO BOOST!', 0xe74c3c, -80);
+              this.flashScreen(0xe74c3c, 0.3, 150);
+              break;
+          }
+          
+          this.updateGadgetUI();
+        }
+        
+        updateGadgetUI(){
+          const charges = this.gadgetCharges || 0;
+          this.gadgetChargesText.setText(charges > 0 ? charges.toString() : '');
+          const alpha = charges > 0 ? 1.0 : 0.4;
+          this.gadgetBtn.setAlpha(alpha);
+          
+          // Update icon based on gadget type
+          const icons = {
+            medkit: '💊',
+            shield_gen: '🛡️', 
+            emp_grenade: '⚡',
+            smoke_grenade: '💨',
+            ammo_pack: '📦'
+          };
+          this.gadgetIcon.setText(icons[this.equipGadget] || '💊');
+        }
+        
+        changeWeather(){
+          const weatherTypes = Object.keys(WEATHER_EFFECTS);
+          this.currentWeather = Phaser.Utils.Array.GetRandom(weatherTypes);
+          const weather = WEATHER_EFFECTS[this.currentWeather];
+          
+          // Clear existing particles
+          if(this.weatherParticles) {
+            this.weatherParticles.destroy();
+            this.weatherParticles = null;
+          }
+          
+          // Add weather overlay using graphics instead of camera tint
+          if(this.weatherOverlay) {
+            this.weatherOverlay.destroy();
+            this.weatherOverlay = null;
+          }
+          
+          if(weather.color) {
+            this.weatherOverlay = this.add.rectangle(GAME_W/2, GAME_H/2, GAME_W, GAME_H, weather.color)
+              .setAlpha(0.15)
+              .setDepth(25)
+              .setBlendMode(Phaser.BlendModes.MULTIPLY);
+          }
+          
+          // Weather particles (simplified for now)
+          // Will implement particle effects later
+          
+          this.floatText(`Weather: ${weather.name}`, weather.color || 0xffffff, -100);
+          this.weatherChangeAt = this.time.now + Phaser.Math.Between(60000, 120000);
+          
+          // Apply visibility effects to existing objects
+          this.applyWeatherVisibility();
+        }
+        
+        applyWeatherVisibility(){
+          const weather = WEATHER_EFFECTS[this.currentWeather];
+          if(!weather) return;
+          
+          const alpha = weather.visMult;
+          
+          // Apply to enemies
+          this.enemies.forEach(e => {
+            if(e.container && e.container.active) {
+              e.container.setAlpha(alpha);
+            }
+          });
+          
+          // Apply to coins
+          this.coinItems.forEach(c => {
+            if(c.img && c.img.active) {
+              c.img.setAlpha(alpha);
+            }
+          });
+          
+          // Apply to hazards
+          this.hazards.forEach(h => {
+            if(h.container && h.container.active) {
+              h.container.setAlpha(alpha);
+            }
+          });
+          
+          // Apply to gates
+          this.gates.forEach(g => {
+            if(g.container && g.container.active) {
+              g.container.setAlpha(alpha);
+            }
+          });
+        }
+        
+        startCampaignMission(missionKey){
+          const mission = CAMPAIGN_MISSIONS[missionKey];
+          if(!mission || !this.campaignUnlocked.has(missionKey)) return false;
+          
+          this.campaignMode = true;
+          this.currentMission = mission;
+          this.missionProgress = 0;
+          this.missionTarget = mission.target;
+          
+          // Set mission-specific parameters
+          this.currentWeather = mission.weather;
+          this.difficulty = mission.difficulty > 1.0 ? 'hard' : mission.difficulty > 0.8 ? 'normal' : 'easy';
+          this.applyDifficulty();
+          
+          // Apply weather immediately
+          this.changeWeather();
+          
+          this.floatText(`Mission: ${mission.name}`, 0x2ecc71, -120);
+          return true;
+        }
+        
+        updateCampaignProgress(type, amount = 1){
+          if(!this.campaignMode || !this.currentMission) return;
+          
+          const mission = this.currentMission;
+          if(mission.objective === type) {
+            this.missionProgress += amount;
+            
+            // Check for mission completion
+            if(this.missionProgress >= this.missionTarget) {
+              this.completeCampaignMission();
+            }
+          } else if(mission.objective === 'no_damage' && type === 'took_damage') {
+            // Fail no-damage mission if any damage is taken
+            this.floatText('Mission Failed!', 0xff7373, -120);
+            this.campaignMode = false;
+            this.currentMission = null;
+          }
+        }
+        
+        completeCampaignMission(){
+          if(!this.campaignMode || !this.currentMission) return;
+          
+          const mission = this.currentMission;
+          this.coins += mission.reward;
+          this.floatText(`Mission Complete! +${mission.reward}💰`, 0x2ecc71, -140);
+          this.synth.win();
+          
+          // Unlock next mission
+          if(mission.unlocks && !this.campaignUnlocked.has(mission.unlocks)) {
+            this.campaignUnlocked.add(mission.unlocks);
+            this.floatText(`New Mission Unlocked!`, 0xffd700, -100);
+          }
+          
+          this.saveMeta();
+          this.campaignMode = false;
+          this.currentMission = null;
+        }
+        
+        upgradeFacility(facilityKey){
+          const facility = BASE_FACILITIES[facilityKey];
+          if(!facility) return false;
+          
+          const currentLevel = this.baseFacilities[facilityKey] || 0;
+          if(currentLevel >= facility.maxLevel) return false;
+          
+          const cost = Math.floor(facility.baseCost * Math.pow(facility.costMultiplier, currentLevel));
+          if(this.coins < cost) return false;
+          
+          this.coins -= cost;
+          this.baseFacilities[facilityKey] = currentLevel + 1;
+          this.saveMeta();
+          
+          this.floatText(`${facility.icon} ${facility.name} upgraded!`, 0x2ecc71, -120);
+          this.synth.ok();
+          
+          // Apply facility bonuses immediately
+          this.applyFacilityBonuses();
+          return true;
+        }
+        
+        getFacilityCost(facilityKey){
+          const facility = BASE_FACILITIES[facilityKey];
+          if(!facility) return 0;
+          
+          const currentLevel = this.baseFacilities[facilityKey] || 0;
+          if(currentLevel >= facility.maxLevel) return -1; // Max level
+          
+          return Math.floor(facility.baseCost * Math.pow(facility.costMultiplier, currentLevel));
+        }
+        
+        applyFacilityBonuses(){
+          // Apply base facility bonuses to game stats
+          Object.keys(BASE_FACILITIES).forEach(key => {
+            const facility = BASE_FACILITIES[key];
+            const level = this.baseFacilities[key] || 0;
+            
+            if(level > 0) {
+              switch(facility.effect) {
+                case 'starting_squad':
+                  // Starting squad bonus is applied in game initialization
+                  break;
+                case 'weapon_damage':
+                  // Weapon damage bonus is applied in damage calculations
+                  break;
+                case 'gadget_charges':
+                  // Gadget charges bonus is applied in equipment initialization
+                  break;
+                case 'cooldown_reduction':
+                  // Cooldown reduction is applied in ability calculations
+                  break;
+                case 'cost_reduction':
+                  // Cost reduction is applied in shop calculations
+                  break;
+              }
+            }
+          });
+        }
+        
+        calculateHitChance(){
+          if(!COMBAT_MECHANICS) return 0.85; // Fallback if constants not loaded
+          let accuracy = COMBAT_MECHANICS.precision.baseAccuracy;
+          
+          // Weather penalty
+          const weather = WEATHER_EFFECTS[this.currentWeather];
+          if(weather && weather.visMult < 1.0) {
+            accuracy -= COMBAT_MECHANICS.precision.weatherPenalty;
+          }
+          
+          // Lane switching penalty
+          if(this.time.now - this.lastLaneSwitch < 1000) {
+            accuracy -= COMBAT_MECHANICS.precision.movingPenalty;
+          }
+          
+          // Combo bonus
+          accuracy += this.comboLevel * COMBAT_MECHANICS.precision.comboCHARM;
+          
+          return Math.max(0.1, Math.min(0.95, accuracy)); // Clamp between 10% and 95%
+        }
+        
+        calculateCriticalChance(){
+          if(!COMBAT_MECHANICS) return 0.15; // Fallback if constants not loaded
+          let critChance = COMBAT_MECHANICS.critical.chance;
+          
+          // Critical streak bonuses
+          const combos = COMBAT_MECHANICS.critical.combos;
+          if(this.criticalStreak >= combos.streak10.threshold) {
+            critChance += combos.streak10.bonus;
+          } else if(this.criticalStreak >= combos.streak5.threshold) {
+            critChance += combos.streak5.bonus;
+          } else if(this.criticalStreak >= combos.streak3.threshold) {
+            critChance += combos.streak3.bonus;
+          }
+          
+          return Math.min(0.5, critChance); // Cap at 50%
+        }
+        
+        getFormationBonus(){
+          if(!COMBAT_MECHANICS) return 1.0; // Fallback if constants not loaded
+          const formations = COMBAT_MECHANICS.formation;
+          if(this.squad >= formations.large.threshold) {
+            this.currentFormation = formations.large;
+            return formations.large.bonus;
+          } else if(this.squad >= formations.medium.threshold) {
+            this.currentFormation = formations.medium;
+            return formations.medium.bonus;
+          } else if(this.squad >= formations.small.threshold) {
+            this.currentFormation = formations.small;
+            return formations.small.bonus;
+          }
+          this.currentFormation = null;
+          return 1.0;
+        }
+        
+        updateFormationDisplay(){
+          if(!this.add) return; // Safety check - scene not ready
+          if(!this.formationText) {
+            this.formationText = this.add.text(300, 60, '', {
+              fontFamily:'Verdana', 
+              fontSize:'12px', 
+              color:'#2ecc71'
+            }).setDepth(10);
+          }
+          
+          if(this.currentFormation) {
+            this.formationText.setText(`${this.currentFormation.name} (+${Math.round((this.currentFormation.bonus - 1.0) * 100)}%)`);
+          } else {
+            this.formationText.setText('');
+          }
+        }
+        
+        updateSpecialAbilityUI(){
+          const ability = SPECIAL_ABILITIES[this.currentSquadType.special];
+          const cooldownLeft = Math.max(0, this.specialCooldownUntil - this.time.now);
+          
+          if(cooldownLeft > 0) {
+            this.specialCooldownText.setText(Math.ceil(cooldownLeft/1000) + 's');
+            this.specialIcon.setAlpha(0.5);
+          } else {
+            this.specialCooldownText.setText('');
+            this.specialIcon.setAlpha(1.0);
+          }
+          
+          // Update icon based on squad type
+          const icons = {
+            rampage_mode: '💀', phase_through: '👻', shield_wall: '🛡️', 
+            auto_heal: '❤️', deploy_turret: '🔫'
+          };
+          this.specialIcon.setText(icons[this.currentSquadType.special] || '⚡');
+        }
+
+        /* ---------- Achievement & Mission System ---------- */
+        checkAchievement(key) {
+          if(this.achievementsUnlocked.has(key)) return;
+          
+          const achievement = ACHIEVEMENTS[key];
+          if(!achievement) return;
+          
+          let unlock = false;
+          switch(key) {
+            case 'first_coin': unlock = this.runPickupCoins >= 1; break;
+            case 'combo_master': unlock = this.comboMultiplier >= 3.0; break;
+            case 'boss_slayer': unlock = this.bossPhase && this.bossHP <= 0; break;
+            case 'speed_demon': unlock = (Date.now() - this.runStartTime) < 180000 && this.finished; break;
+            case 'collector': unlock = this.runPickupCoins >= 100; break;
+            case 'survivor': unlock = this.runSurvivalTime >= 300; break;
+            case 'specialist': unlock = this.squadsOwned.size >= 3; break;
+            case 'perfectionist': unlock = !this.runTookDamage && this.finished; break;
+          }
+          
+          if(unlock) {
+            this.achievementsUnlocked.add(key);
+            this.coins += achievement.reward;
+            this.floatText(`${achievement.icon} ${achievement.name}!`, 0xffd700, -120);
+            this.synth.win();
+            this.saveMeta();
+          }
+        }
+        
+        updateMissionProgress(type, amount = 1) {
+          this.dailyMissions.forEach(mission => {
+            if(mission.type === type && !mission.completed) {
+              mission.progress = Math.min(mission.progress + amount, mission.target);
+              if(mission.progress >= mission.target) {
+                mission.completed = true;
+                this.coins += mission.reward;
+                this.floatText(`Mission Complete! +${mission.reward}💰`, 0x2ecc71, -100);
+                this.synth.ok();
+              }
+            }
+          });
+          this.saveMeta();
+        }
+
         /* ---------- Create ---------- */
         create(){
           this.createMeta(); this.applyDifficulty();
+          
+          // Initialize timers now that this.time is available
+          this.weatherChangeAt = this.time.now + Phaser.Math.Between(45000, 90000);
+          this.lastSurvivalCheck = this.time.now;
 
           // Extra safety on scene shutdown
           this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -547,6 +1346,22 @@
           this.puShieldTxt=this.add.text(-20,0,'🛡 0',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(0,0.5);
           this.puSlowTxt=this.add.text(30,0,'⏱ 0',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(0,0.5);
           this.puHud.add([badgeBg,this.puMagTxt,this.puShieldTxt,this.puSlowTxt]);
+
+          // Special Ability Button
+          this.specialBtn=this.add.container(GAME_W-50,90).setDepth(20).setInteractive(new Phaser.Geom.Circle(0,0,20), Phaser.Geom.Circle.Contains);
+          const specialBg=this.add.circle(0,0,20,0x2c3e50).setStrokeStyle(2,0x34495e);
+          this.specialIcon=this.add.text(0,0,'⚡',{fontFamily:'Verdana',fontSize:'16px',color:'#ecf0f1'}).setOrigin(0.5);
+          this.specialCooldownText=this.add.text(0,32,'',{fontFamily:'Verdana',fontSize:'10px',color:'#e74c3c'}).setOrigin(0.5);
+          this.specialBtn.add([specialBg,this.specialIcon,this.specialCooldownText]);
+          this.specialBtn.on('pointerdown',()=>this.activateSpecialAbility());
+
+          // Gadget Button  
+          this.gadgetBtn=this.add.container(GAME_W-50,130).setDepth(20).setInteractive(new Phaser.Geom.Circle(0,0,18), Phaser.Geom.Circle.Contains);
+          const gadgetBg=this.add.circle(0,0,18,0x4a3e50).setStrokeStyle(2,0x6a5a70);
+          this.gadgetIcon=this.add.text(0,0,'💊',{fontFamily:'Verdana',fontSize:'14px',color:'#ecf0f1'}).setOrigin(0.5);
+          this.gadgetChargesText=this.add.text(0,28,'',{fontFamily:'Verdana',fontSize:'10px',color:'#e74c3c'}).setOrigin(0.5);
+          this.gadgetBtn.add([gadgetBg,this.gadgetIcon,this.gadgetChargesText]);
+          this.gadgetBtn.on('pointerdown',()=>this.useGadget());
 
           // Pause button
           this.pauseBtn=this.add.container(GAME_W-28,26).setDepth(20)
@@ -688,9 +1503,10 @@
           this.nextPatternAt=this.distance+Phaser.Math.Between(380,650);
         }
         baseKindWeights(){ const d=this.distance;
-          if(d<1200) return {grunt:0.8,armored:0.12,bomber:0.08};
-          if(d<2500) return {grunt:0.55,armored:0.2,bomber:0.15,zig:0.10};
-          return {grunt:0.40,armored:0.25,bomber:0.20,zig:0.15}; }
+          if(d<800) return {grunt:0.8,armored:0.12,bomber:0.08};
+          if(d<1600) return {grunt:0.55,armored:0.2,bomber:0.15,zig:0.10};
+          if(d<2800) return {grunt:0.35,armored:0.2,bomber:0.15,zig:0.15,sniper:0.10,tank:0.05};
+          return {grunt:0.25,armored:0.15,bomber:0.15,zig:0.15,sniper:0.15,tank:0.10,drone:0.05}; }
         blendedKindWeights(){
           const base=this.baseKindWeights(), tw=this.currentTheme.weights;
           if(!tw) return base; const bias=0.6, keys=new Set([...Object.keys(base),...Object.keys(tw)]), out={};
@@ -765,14 +1581,24 @@
           vibeBtn.on('pointerdown',()=>{ this.vibrateOn=!this.vibrateOn; this.saveMeta(); this.synth.uiClick();
             vibeTxt.setText(`Haptics: ${this.vibrateOn?'ON':'OFF'}`); });
 
-          // --- Cosmetic Shop button ---
-          const shopY = row4Y + 32 + ROW_GAP + 6;
-          const shopBtn=this.add.rectangle(0,shopY,BTN_W,38,0x9fc8ff).setInteractive({useHandCursor:true});
-          const shopTxt=this.add.text(0,shopY,'Cosmetic Shop',{fontFamily:'Verdana',fontSize:'16px',color:'#05121b'}).setOrigin(.5);
+          // --- Equipment & Shop buttons ---
+          const equipY = row4Y + 32 + ROW_GAP + 6;
+          const eqBtn=this.add.rectangle(-BTN_W/2-5,equipY,BTN_W-10,38,0xff9500).setInteractive({useHandCursor:true});
+          const eqTxt=this.add.text(-BTN_W/2-5,equipY,'Equipment',{fontFamily:'Verdana',fontSize:'14px',color:'#05121b'}).setOrigin(.5);
+          eqBtn.on('pointerdown',()=>{ this.synth.uiClick(); this.openEquipmentMenu(); });
+
+          const shopBtn=this.add.rectangle(+BTN_W/2+5,equipY,BTN_W-10,38,0x9fc8ff).setInteractive({useHandCursor:true});
+          const shopTxt=this.add.text(+BTN_W/2+5,equipY,'Shop',{fontFamily:'Verdana',fontSize:'14px',color:'#05121b'}).setOrigin(.5);
           shopBtn.on('pointerdown',()=>{ this.synth.uiClick(); this.openCosmeticShop(); });
 
+          // Controls button
+          const controlsY = equipY + 38 + 8;
+          const controlsBtn=this.add.rectangle(0,controlsY,BTN_W*0.8,32,0x25324a).setInteractive({useHandCursor:true});
+          const controlsTxt=this.add.text(0,controlsY,'Controls & Help',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          controlsBtn.on('pointerdown',()=>{ this.synth.uiClick(); this.openControlsMenu(); });
+
           // Play
-          const playY=shopY + 38 + (ROW_GAP+4);
+          const playY=controlsY + 32 + 12;
           const btn=this.add.rectangle(0,playY,180,44,0x39d2ff).setInteractive({useHandCursor:true});
           const btnText=this.add.text(0,playY,'Play',{fontFamily:'Verdana',fontSize:'18px',color:'#05121b'}).setOrigin(.5);
           btn.on('pointerdown',()=>{ this.startBlock.destroy(); this.startRun(true); });
@@ -783,7 +1609,8 @@
             volMinus,volPlus,volMinusTxt,volPlusTxt,volTxt,
             motionBtn,motionTxt,
             vibeBtn,vibeTxt,
-            shopBtn,shopTxt,
+            eqBtn,eqTxt,shopBtn,shopTxt,
+            controlsBtn,controlsTxt,
             btn,btnText]);
         }
 
@@ -798,11 +1625,13 @@
           const title=this.add.text(0,-H/2+28,'Cosmetic Shop',{fontFamily:'Verdana',fontSize:'20px',color:'#e7f0ff'}).setOrigin(.5);
 
           const tabsY=-H/2+66;
-          const tabW=(W-40)/2;
-          const tabA=this.add.rectangle(-tabW/2-10,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
-          const tabB=this.add.rectangle(+tabW/2+10,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
-          const tabAT=this.add.text(-tabW/2-10,tabsY,'Player Skins',{fontFamily:'Verdana',fontSize:'14px',color:'#cfe1ff'}).setOrigin(.5);
-          const tabBT=this.add.text(+tabW/2+10,tabsY,'Map Themes',{fontFamily:'Verdana',fontSize:'14px',color:'#cfe1ff'}).setOrigin(.5);
+          const tabW=(W-40)/3;
+          const tabA=this.add.rectangle(-tabW-5,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabB=this.add.rectangle(0,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabC=this.add.rectangle(+tabW+5,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabAT=this.add.text(-tabW-5,tabsY,'Skins',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const tabBT=this.add.text(0,tabsY,'Themes',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const tabCT=this.add.text(+tabW+5,tabsY,'Squads',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
 
           const closeBtn=this.add.rectangle(W/2-18,-H/2+18,22,22,0x25324a).setInteractive({useHandCursor:true});
           const closeTx=this.add.text(W/2-18,-H/2+18,'✕',{fontFamily:'Verdana',fontSize:'14px',color:'#cfe1ff'}).setOrigin(.5);
@@ -812,11 +1641,28 @@
 
           const list = this.add.container(0,0);
 
-          const drawList = (mode)=>{ // mode: 'player' | 'theme'
+          const drawList = (mode)=>{ // mode: 'player' | 'theme' | 'squad'
             list.removeAll(true);
-            const items = (mode==='player') ? PLAYER_SKINS : THEME_ITEMS;
-            const owned = (mode==='player') ? this.playersOwned : this.themesOwned;
-            const equipped = (mode==='player') ? this.equipPlayer : this.equipTheme;
+            let items, owned, equipped;
+            
+            if(mode === 'player') {
+              items = PLAYER_SKINS;
+              owned = this.playersOwned;
+              equipped = this.equipPlayer;
+            } else if(mode === 'theme') {
+              items = THEME_ITEMS;
+              owned = this.themesOwned;
+              equipped = this.equipTheme;
+            } else if(mode === 'squad') {
+              items = Object.keys(SQUAD_TYPES).map(key => ({
+                key: key,
+                name: SQUAD_TYPES[key].name,
+                price: SQUAD_TYPES[key].price,
+                description: SQUAD_TYPES[key].description
+              }));
+              owned = this.squadsOwned;
+              equipped = this.equipSquad;
+            }
             let y=-H/2+130;
             for(const it of items){
               const row=this.add.container(0,y);
@@ -833,12 +1679,21 @@
                 const ic1=this.add.image(-W/2+24,0,tnames.soldier).setOrigin(0,0.5);
                 const ic2=this.add.image(-W/2+48,0,tnames.leader).setOrigin(0,0.5);
                 row.add([ic1,ic2]);
-              } else {
+              } else if(mode==='theme') {
                 const vis=VISUAL_THEMES[it.key]||VISUAL_THEMES.default;
                 const sw=this.add.graphics();
                 sw.fillStyle(vis.roadTint,1).fillRect(-W/2+24-2,-10,28,20);
                 sw.lineStyle(2,vis.lane,1).strokeRect(-W/2+24-2,-10,28,20);
                 row.add(sw);
+              } else if(mode==='squad') {
+                const squadType = SQUAD_TYPES[it.key];
+                const squadIcon = this.add.graphics();
+                squadIcon.fillStyle(squadType.color, 1).fillCircle(-W/2+36, 0, 12);
+                const ability = SPECIAL_ABILITIES[squadType.special];
+                const abilityIcon = this.add.text(-W/2+36, 0, 
+                  {rampage_mode:'💀',phase_through:'👻',shield_wall:'🛡️',auto_heal:'❤️',deploy_turret:'🔫'}[squadType.special] || '⚡',
+                  {fontFamily:'Verdana',fontSize:'12px',color:'#fff'}).setOrigin(0.5);
+                row.add([squadIcon, abilityIcon]);
               }
 
               // Action button
@@ -871,7 +1726,8 @@
                   } else { this.synth.bad(); this.flashFloating(0,90,'Not enough coins',0xff7373); }
                 } else {
                   if(mode==='player'){ this.equipPlayerSkin(it.key); }
-                  else { this.equipVisualTheme(it.key); }
+                  else if(mode==='theme') { this.equipVisualTheme(it.key); }
+                  else if(mode==='squad') { this.equipSquadType(it.key); }
                 }
                 refreshRow();
               });
@@ -885,9 +1741,255 @@
           drawList('player');
           tabA.on('pointerdown',()=>{ this.synth.uiClick(); drawList('player'); });
           tabB.on('pointerdown',()=>{ this.synth.uiClick(); drawList('theme'); });
+          tabC.on('pointerdown',()=>{ this.synth.uiClick(); drawList('squad'); });
 
-          c.add([bg,title,tabA,tabB,tabAT,tabBT,closeBtn,closeTx,coinsTxt,list]);
+          c.add([bg,title,tabA,tabB,tabC,tabAT,tabBT,tabCT,closeBtn,closeTx,coinsTxt,list]);
           this.shopOverlay=c;
+        }
+
+        // --- Equipment Menu ---
+        openEquipmentMenu(){
+          if(this.equipmentOverlay){ this.equipmentOverlay.destroy(); this.equipmentOverlay=null; }
+          const W=460, H=580;
+          
+          const c=this.add.container(GAME_W/2,GAME_H/2).setDepth(350);
+          const bg=this.add.rectangle(0,0,W,H,0x0f1626).setStrokeStyle(3,0xff9500).setAlpha(.98);
+          const title=this.add.text(0,-H/2+28,'Equipment Loadout',{fontFamily:'Verdana',fontSize:'20px',color:'#e7f0ff'}).setOrigin(.5);
+
+          const closeBtn=this.add.rectangle(W/2-18,-H/2+18,22,22,0x25324a).setInteractive({useHandCursor:true});
+          const closeTx=this.add.text(W/2-18,-H/2+18,'✕',{fontFamily:'Verdana',fontSize:'14px',color:'#cfe1ff'}).setOrigin(.5);
+          closeBtn.on('pointerdown',()=>{ this.synth.uiClick(); c.destroy(); });
+
+          const coinsTxt=this.add.text(0,-H/2+60,`Wallet: ${this.coins} 💰`,{fontFamily:'Verdana',fontSize:'14px',color:'#ffd37e'}).setOrigin(.5);
+
+          // Current loadout display
+          const loadoutY = -H/2+90;
+          const currentTxt=this.add.text(0,loadoutY,'Current Loadout',{fontFamily:'Verdana',fontSize:'16px',color:'#e7f0ff'}).setOrigin(.5);
+          const weaponTxt=this.add.text(0,loadoutY+25,`Weapon: ${this.currentWeapon.name}`,{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const armorTxt=this.add.text(0,loadoutY+40,`Armor: ${this.currentArmor.name}`,{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const gadgetTxt=this.add.text(0,loadoutY+55,`Gadget: ${this.currentGadget.name}`,{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+
+          // Category buttons
+          const tabsY = loadoutY + 80;
+          const tabW = (W-60)/3;
+          const tabA=this.add.rectangle(-tabW-10,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabB=this.add.rectangle(0,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabC=this.add.rectangle(+tabW+10,tabsY,tabW,28,0x25324a).setInteractive({useHandCursor:true});
+          const tabAT=this.add.text(-tabW-10,tabsY,'Weapons',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const tabBT=this.add.text(0,tabsY,'Armor',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+          const tabCT=this.add.text(+tabW+10,tabsY,'Gadgets',{fontFamily:'Verdana',fontSize:'12px',color:'#cfe1ff'}).setOrigin(.5);
+
+          const list = this.add.container(0,0);
+
+          const drawEquipmentList = (category) => {
+            list.removeAll(true);
+            const items = EQUIPMENT[category];
+            const owned = this.equipmentOwned[category];
+            const equipped = category === 'weapons' ? this.equipWeapon : 
+                            category === 'armor' ? this.equipArmor : this.equipGadget;
+            
+            let y = tabsY + 50;
+            Object.entries(items).forEach(([key, item]) => {
+              const row = this.add.container(0, y);
+              const rowBg = this.add.rectangle(0,0,W-40,60,0x0b1322).setStrokeStyle(1,0x37507f).setAlpha(.95);
+              
+              const name = this.add.text(-W/2+20, -10, item.name, {fontFamily:'Verdana',fontSize:'14px',color:'#e7f0ff'}).setOrigin(0,0.5);
+              const desc = this.add.text(-W/2+20, +8, item.description, {fontFamily:'Verdana',fontSize:'11px',color:'#a9c0ff'}).setOrigin(0,0.5);
+              
+              // Stats display
+              let statsText = '';
+              if(category === 'weapons') statsText = `DMG:${item.dmg.toFixed(1)} ROF:${item.rof.toFixed(1)} ACC:${item.accuracy.toFixed(1)}`;
+              else if(category === 'armor') statsText = `SPD:${item.speed.toFixed(1)} DEF:${item.protection.toFixed(1)}`;
+              else statsText = `${item.effect.toUpperCase()} x${item.charges}`;
+              
+              const stats = this.add.text(W/2-20, +8, statsText, {fontFamily:'Verdana',fontSize:'10px',color:'#ffcc00'}).setOrigin(1,0.5);
+              
+              const isOwned = owned.includes(key);
+              const isEquipped = equipped === key;
+              
+              let statusTxt = isOwned ? (isEquipped ? 'Equipped' : 'Owned') : 'Locked';
+              const status = this.add.text(W/2-20, -10, statusTxt, {fontFamily:'Verdana',fontSize:'12px',color: isEquipped ? '#2ecc71' : '#a9c0ff'}).setOrigin(1,0.5);
+
+              // Action button
+              const btnW=100, btnH=24;
+              const btn=this.add.rectangle(W/2-70,0,btnW,btnH,0x39d2ff).setInteractive({useHandCursor:true});
+              const btnLabel=this.add.text(W/2-70,0,'',{fontFamily:'Verdana',fontSize:'11px',color:'#05121b'}).setOrigin(.5);
+
+              const refreshRow = () => {
+                if(isEquipped){ 
+                  btn.setFillStyle(0x25324a); 
+                  btnLabel.setColor('#cfe1ff'); 
+                  btnLabel.setText('Equipped'); 
+                  btn.disableInteractive(); 
+                } else if(isOwned){ 
+                  btn.setFillStyle(0x2ad07a); 
+                  btnLabel.setColor('#05121b'); 
+                  btnLabel.setText('Equip'); 
+                  btn.setInteractive({useHandCursor:true}); 
+                } else { 
+                  const workshopDiscount = 1.0 - ((this.baseFacilities?.workshop || 0) * BASE_FACILITIES.workshop.bonus);
+                  const finalPrice = Math.floor(item.price * workshopDiscount);
+                  btn.setFillStyle(0x39d2ff); 
+                  btnLabel.setColor('#05121b'); 
+                  btnLabel.setText(`Buy ${finalPrice}💰`); 
+                  btn.setInteractive({useHandCursor:true}); 
+                }
+              };
+              refreshRow();
+
+              btn.on('pointerdown',()=>{
+                this.synth.uiClick();
+                if(!isOwned){
+                  const workshopDiscount = 1.0 - ((this.baseFacilities?.workshop || 0) * BASE_FACILITIES.workshop.bonus);
+                  const finalPrice = Math.floor(item.price * workshopDiscount);
+                  if(this.coins >= finalPrice){
+                    this.coins -= finalPrice;
+                    this.equipmentOwned[category].push(key);
+                    coinsTxt.setText(`Wallet: ${this.coins} 💰`);
+                    this.saveMeta();
+                    this.synth.ok();
+                    drawEquipmentList(category); // Refresh
+                  } else { 
+                    this.synth.bad(); 
+                    this.flashFloating(0,90,'Not enough coins',0xff7373); 
+                  }
+                } else {
+                  // Equip item
+                  if(category === 'weapons') this.equipWeapon = key;
+                  else if(category === 'armor') this.equipArmor = key;
+                  else this.equipGadget = key;
+                  this.saveMeta();
+                  
+                  // Update current loadout display
+                  this.currentWeapon = EQUIPMENT.weapons[this.equipWeapon];
+                  this.currentArmor = EQUIPMENT.armor[this.equipArmor];
+                  this.currentGadget = EQUIPMENT.gadgets[this.equipGadget];
+                  weaponTxt.setText(`Weapon: ${this.currentWeapon.name}`);
+                  armorTxt.setText(`Armor: ${this.currentArmor.name}`);
+                  gadgetTxt.setText(`Gadget: ${this.currentGadget.name}`);
+                  
+                  drawEquipmentList(category); // Refresh
+                }
+              });
+
+              row.add([rowBg, name, desc, stats, status, btn, btnLabel]);
+              list.add(row);
+              y += 70;
+            });
+          };
+
+          drawEquipmentList('weapons');
+          tabA.on('pointerdown',()=>{ this.synth.uiClick(); drawEquipmentList('weapons'); });
+          tabB.on('pointerdown',()=>{ this.synth.uiClick(); drawEquipmentList('armor'); });
+          tabC.on('pointerdown',()=>{ this.synth.uiClick(); drawEquipmentList('gadgets'); });
+
+          c.add([bg,title,closeBtn,closeTx,coinsTxt,currentTxt,weaponTxt,armorTxt,gadgetTxt,
+                 tabA,tabB,tabC,tabAT,tabBT,tabCT,list]);
+          this.equipmentOverlay=c;
+        }
+
+        openControlsMenu(){
+          if(this.controlsOverlay){ this.controlsOverlay.destroy(); this.controlsOverlay=null; }
+          const W=500, H=600;
+          
+          const c=this.add.container(GAME_W/2,GAME_H/2).setDepth(350);
+          const bg=this.add.rectangle(0,0,W,H,0x0f1626).setStrokeStyle(3,0x25324a).setAlpha(.98);
+          const title=this.add.text(0,-H/2+28,'Controls & Help',{fontFamily:'Verdana',fontSize:'20px',color:'#e7f0ff'}).setOrigin(.5);
+
+          const closeBtn=this.add.rectangle(W/2-18,-H/2+18,22,22,0x25324a).setInteractive({useHandCursor:true});
+          const closeTx=this.add.text(W/2-18,-H/2+18,'✕',{fontFamily:'Verdana',fontSize:'14px',color:'#cfe1ff'}).setOrigin(.5);
+          closeBtn.on('pointerdown',()=>{ this.synth.uiClick(); c.destroy(); this.controlsOverlay=null; });
+
+          // Create scrollable content
+          let yPos = -H/2 + 70;
+          const leftX = -W/2 + 30;
+          const rightX = W/2 - 30;
+
+          // Movement Controls Section
+          const movementTitle = this.add.text(0, yPos, 'MOVEMENT CONTROLS', {fontFamily:'Verdana',fontSize:'16px',color:'#39d2ff'}).setOrigin(.5);
+          yPos += 25;
+          
+          const keyboardTxt = this.add.text(leftX, yPos, '• Arrow Keys / WASD', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const keyboardDesc = this.add.text(rightX, yPos, 'Move between lanes', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const touchTxt = this.add.text(leftX, yPos, '• Touch/Click', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const touchDesc = this.add.text(rightX, yPos, 'Tap screen sides to move', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 30;
+
+          // Game Controls Section
+          const gameTitle = this.add.text(0, yPos, 'GAME CONTROLS', {fontFamily:'Verdana',fontSize:'16px',color:'#39d2ff'}).setOrigin(.5);
+          yPos += 25;
+          
+          const pauseTxt = this.add.text(leftX, yPos, '• P Key', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const pauseDesc = this.add.text(rightX, yPos, 'Pause/Resume game', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const restartTxt = this.add.text(leftX, yPos, '• R Key', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const restartDesc = this.add.text(rightX, yPos, 'Quick restart run', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const debugTxt = this.add.text(leftX, yPos, '• F12 Key', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const debugDesc = this.add.text(rightX, yPos, 'Toggle debug overlay', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 30;
+
+          // Squad Abilities Section
+          const squadTitle = this.add.text(0, yPos, 'SQUAD ABILITIES', {fontFamily:'Verdana',fontSize:'16px',color:'#39d2ff'}).setOrigin(.5);
+          yPos += 25;
+          
+          const assaultTxt = this.add.text(leftX, yPos, '• Assault Squad', {fontFamily:'Verdana',fontSize:'12px',color:'#ff6b6b'}).setOrigin(0,.5);
+          const assaultDesc = this.add.text(rightX, yPos, 'Rampage Mode (+damage)', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const medTxt = this.add.text(leftX, yPos, '• Medical Squad', {fontFamily:'Verdana',fontSize:'12px',color:'#2ecc71'}).setOrigin(0,.5);
+          const medDesc = this.add.text(rightX, yPos, 'Emergency Heal', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const engineerTxt = this.add.text(leftX, yPos, '• Engineer Squad', {fontFamily:'Verdana',fontSize:'12px',color:'#f39c12'}).setOrigin(0,.5);
+          const engineerDesc = this.add.text(rightX, yPos, 'Barrier Shield (+defense)', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const stealthTxt = this.add.text(leftX, yPos, '• Stealth Squad', {fontFamily:'Verdana',fontSize:'12px',color:'#9b59b6'}).setOrigin(0,.5);
+          const stealthDesc = this.add.text(rightX, yPos, 'Ghost Mode (avoid enemies)', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 30;
+
+          // Equipment Section
+          const equipTitle = this.add.text(0, yPos, 'EQUIPMENT SYSTEM', {fontFamily:'Verdana',fontSize:'16px',color:'#39d2ff'}).setOrigin(.5);
+          yPos += 25;
+          
+          const weaponsTxt = this.add.text(leftX, yPos, '• Weapons', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const weaponsDesc = this.add.text(rightX, yPos, 'Increase damage & accuracy', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const armorTxt = this.add.text(leftX, yPos, '• Armor', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const armorDescc = this.add.text(rightX, yPos, 'Reduce damage taken', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 18;
+          
+          const gadgetsTxt = this.add.text(leftX, yPos, '• Gadgets', {fontFamily:'Verdana',fontSize:'12px',color:'#e7f0ff'}).setOrigin(0,.5);
+          const gadgetsDesc = this.add.text(rightX, yPos, 'Active abilities (auto-use)', {fontFamily:'Verdana',fontSize:'12px',color:'#a9c0ff'}).setOrigin(1,.5);
+          yPos += 30;
+
+          // Game Mechanics Section  
+          const mechTitle = this.add.text(0, yPos, 'GAMEPLAY TIPS', {fontFamily:'Verdana',fontSize:'16px',color:'#39d2ff'}).setOrigin(.5);
+          yPos += 25;
+          
+          const tip1 = this.add.text(0, yPos, '• Collect coins to buy equipment and upgrades', {fontFamily:'Verdana',fontSize:'11px',color:'#ffd37e'}).setOrigin(.5);
+          yPos += 15;
+          const tip2 = this.add.text(0, yPos, '• Math gates: + adds squad, × multiplies, - subtracts', {fontFamily:'Verdana',fontSize:'11px',color:'#ffd37e'}).setOrigin(.5);
+          yPos += 15;
+          const tip3 = this.add.text(0, yPos, '• Upgrade your base facilities for permanent bonuses', {fontFamily:'Verdana',fontSize:'11px',color:'#ffd37e'}).setOrigin(.5);
+          yPos += 15;
+          const tip4 = this.add.text(0, yPos, '• Campaign missions unlock new content & rewards', {fontFamily:'Verdana',fontSize:'11px',color:'#ffd37e'}).setOrigin(.5);
+          yPos += 15;
+          const tip5 = this.add.text(0, yPos, '• Weather affects visibility and movement speed', {fontFamily:'Verdana',fontSize:'11px',color:'#ffd37e'}).setOrigin(.5);
+
+          c.add([bg, title, closeBtn, closeTx, 
+                movementTitle, keyboardTxt, keyboardDesc, touchTxt, touchDesc,
+                gameTitle, pauseTxt, pauseDesc, restartTxt, restartDesc, debugTxt, debugDesc,
+                squadTitle, assaultTxt, assaultDesc, medTxt, medDesc, engineerTxt, engineerDesc, stealthTxt, stealthDesc,
+                equipTitle, weaponsTxt, weaponsDesc, armorTxt, armorDescc, gadgetsTxt, gadgetsDesc,
+                mechTitle, tip1, tip2, tip3, tip4, tip5]);
+          this.controlsOverlay = c;
         }
 
         togglePause(){
@@ -939,6 +2041,7 @@
           this.resetState();
 
           this.equipPlayerSkin(this.equipPlayer, {silent:true});
+          this.equipSquadType(this.equipSquad);
 
           if(unlockAudio){ this.synth.unlock(); this.synth.setVolume(this.volume); }
           this.synth.setBoss(false); this.synth.setIntensity(0); this.synth.startMusic();
@@ -969,6 +2072,7 @@
           const fromX=GAME_W/2+LANES_X[this.laneIndex], toX=GAME_W/2+LANES_X[i];
           this.laneSkid(fromX,toX);
           this.laneIndex=i;
+          this.lastLaneSwitch = this.time.now; // Track for combat accuracy penalty
           this.tweens.add({targets:this.player, x:toX, duration:120, ease:'Sine.easeOut'});
           this.doShake('tiny',80);
         }
@@ -999,7 +2103,13 @@
         comboLevelFromMeter(m){ if(m>=COMBO_THRESH[4])return 4; if(m>=COMBO_THRESH[3])return 3; if(m>=COMBO_THRESH[2])return 2; if(m>=COMBO_THRESH[1])return 1; return 0; }
         updateComboUI(initial=false){
           const level=this.comboLevelFromMeter(this.comboMeter);
-          if(level!==this.comboLevel && !initial){ const mult=COMBO_MULT[level].toFixed(1); this.floatText('Combo x'+mult,0xffa14e,-100); this.synth.level(); }
+          if(level!==this.comboLevel && !initial){ 
+            const mult=COMBO_MULT[level].toFixed(1); 
+            this.floatText('Combo x'+mult,0xffa14e,-100); 
+            this.synth.level(); 
+            this.checkAchievement('combo_master');
+            this.updateMissionProgress('reach_combo', this.comboMultiplier);
+          }
           this.comboLevel=level; this.comboMultiplier=COMBO_MULT[level]; this.comboMax=Math.max(this.comboMax,this.comboMultiplier);
           this.comboText.setText('Combo x'+this.comboMultiplier.toFixed(1));
           this.comboFill.width=118*(this.comboMeter/COMBO_MAX);
@@ -1063,6 +2173,13 @@
           img.setActive(false).setVisible(false); 
           this.pools.coin.push(img); 
         }
+        recycleProjectile(proj){ 
+          if (!proj || !proj.active) return;
+          // Kill all tweens before recycling
+          if (this.tweens) this.tweens.killTweensOf(proj);
+          proj.setActive(false).setVisible(false); 
+          this.pools.projectile.push(proj); 
+        }
 
         createGateContainer(){
           const c=this.add.container(0,-200).setActive(false).setVisible(false);
@@ -1085,6 +2202,17 @@
         }
         createCoinImage(){
           return this.add.image(0,-200,'coin').setScale(1).setAlpha(.95).setActive(false).setVisible(false);
+        }
+        createProjectileImage(){
+          const c = this.add.container(0,-200).setActive(false).setVisible(false);
+          const trail = this.add.graphics();
+          trail.fillStyle(0xff4444, 0.8).fillRect(-2, -8, 4, 16);
+          const head = this.add.graphics();
+          head.fillStyle(0xffaaaa, 1.0).fillCircle(0, 0, 3);
+          c.add([trail, head]);
+          c._trail = trail;
+          c._head = head;
+          return c;
         }
 
         /* ---------- Spawners ---------- */
@@ -1111,11 +2239,37 @@
           count=Math.max(1, Math.floor(count * (this.enemyMul||1)));
           if(kind==='armored') count=Math.max(1,Math.floor(count*0.85));
           if(kind==='bomber')  count=Math.max(1,Math.floor(count*0.65));
-          const color=(kind==='armored')?0x9b2a2a:(kind==='bomber')?0xd07a2a:(kind==='zig')?0xb62ad0:0xd02a2a;
-          const icon=(kind==='armored')?'🛡':(kind==='bomber')?'💣':(kind==='zig')?'↔':'';
+          if(kind==='tank')    count=Math.max(1,Math.floor(count*1.5)); // Tanks are stronger
+          if(kind==='sniper')  count=Math.max(1,Math.floor(count*0.4)); // Snipers are fewer but dangerous
+          if(kind==='drone')   count=Math.max(1,Math.floor(count*0.3)); // Fast but weak
+          
+          const colors = {
+            grunt: 0xd02a2a, armored: 0x9b2a2a, bomber: 0xd07a2a, zig: 0xb62ad0,
+            sniper: 0x2a5bd0, tank: 0x4a4a4a, drone: 0xd02ab6
+          };
+          const icons = {
+            grunt: '', armored: '🛡', bomber: '💣', zig: '↔',
+            sniper: '🎯', tank: '🚗', drone: '⚡'
+          };
+          
+          const color = colors[kind] || 0xd02a2a;
+          const icon = icons[kind] || '';
           const c=this.getFromPool('enemy',()=>this.createEnemyContainer());
           c.setPosition(x,y); c._rect.setFillStyle(color,.92); c._txt.setText(String(count)); c._icon.setText(icon);
-          this.enemies.push({container:c,lane,count,kind,resolved:false,nextZigAt:0,dir:(Math.random()<.5?-1:1)});
+          
+          const enemyData = {
+            container:c, lane, count, kind, resolved:false, 
+            nextZigAt:0, dir:(Math.random()<.5?-1:1),
+            // New enemy-specific data
+            nextShotAt:0, projectiles:[], blocked:false, speed:1.0
+          };
+          
+          // Set enemy-specific properties
+          if(kind === 'sniper') enemyData.nextShotAt = this.time.now + 2000; // First shot delay
+          if(kind === 'tank') enemyData.blocked = true; // Blocks lane initially
+          if(kind === 'drone') enemyData.speed = 1.8; // Moves faster
+          
+          this.enemies.push(enemyData);
         }
 
         spawnMine(y){ const lane=Phaser.Math.Between(0,2); this.spawnMineAt(lane,y); }
@@ -1143,6 +2297,16 @@
           const kind=weightedPick(PU_WEIGHT), key=kind==='shield'?'puShield':(kind==='slow'?'puSlow':'puMagnet');
           const img=this.add.image(x,y,key).setScale(1).setAlpha(.95); // (rare; no pool needed)
           this.powerups.push({img,lane,kind,picked:false});
+        }
+
+        spawnProjectile(lane, y, type = 'sniper'){
+          const x = GAME_W/2 + LANES_X[lane];
+          const proj = this.getFromPool('projectile', () => this.createProjectileImage());
+          proj.setPosition(x, y);
+          
+          const speed = 300; // pixels per second
+          const data = { container: proj, lane, type, speed, targetY: PLAYER_Y + 50 };
+          this.projectiles.push(data);
         }
 
         /* ---------- Gameplay resolves ---------- */
@@ -1213,11 +2377,125 @@
               return;
             }
             
-            const armorMul=(e.kind==='armored')?1.35:1.0;
+            // Check for phase ability (stealth squad)
+            if(this.phaseCharges > 0) {
+              this.phaseCharges--;
+              this.floatText('PHASED!', 0x4ecdc4, -60);
+              this.burst(e.container.x, PLAYER_Y-20, 12, 0x4ecdc4, 140, 300);
+              if (e.container && e.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: e.container, 
+                  scale: 1.25, 
+                  alpha: 0, 
+                  duration: 220, 
+                  onComplete: () => {
+                    if (e.container && e.container.active) {
+                      this.recycleEnemyCont(e.container);
+                    }
+                  }
+                });
+              }
+              return;
+            }
+            
+            // Check for shield wall ability (heavy squad)
+            if(this.shieldHits > 0) {
+              this.shieldHits--;
+              this.floatText('BLOCKED!', 0x95a5a6, -60);
+              this.burst(e.container.x, PLAYER_Y-20, 12, 0x95a5a6, 140, 300);
+              if (e.container && e.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: e.container, 
+                  scale: 1.25, 
+                  alpha: 0, 
+                  duration: 220, 
+                  onComplete: () => {
+                    if (e.container && e.container.active) {
+                      this.recycleEnemyCont(e.container);
+                    }
+                  }
+                });
+              }
+              return;
+            }
+            
+            // Handle tank blocking behavior
+            if(e.kind === 'tank' && e.blocked) {
+              // Tank blocks the lane until enough damage is dealt
+              const blockDamage = Math.floor(this.squad * this.currentSquadType.dmgMult * 0.3);
+              e.count -= blockDamage;
+              this.floatText(`Attacking Tank: -${blockDamage}`, 0xffffff, -90);
+              if(e.count <= 0) {
+                e.blocked = false;
+                e.count = Math.max(1, Math.floor(e.count + 5)); // Tank becomes normal enemy
+                this.floatText('Tank Disabled!', 0x2ecc71, -60);
+                this.synth.ok();
+              } else {
+                this.floatText('Tank Blocks!', 0x95a5a6, -60);
+                this.synth.battle();
+                return; // No damage to player while blocked
+              }
+            }
+            
+            const armorMul=(e.kind==='armored')?1.35:(e.kind==='tank')?1.2:1.0;
             const enemyPower=Math.max(1,Math.floor(e.count*(this.enemyMul||1)*armorMul));
-            let survivors=this.squad - enemyPower;
+            
+            // Check for hit/miss with advanced accuracy system
+            const hitChance = this.calculateHitChance();
+            let hitSuccess = Math.random() <= hitChance;
+            if(!hitSuccess) {
+              this.floatText('MISS!', 0xffaa00, -60);
+              this.criticalStreak = 0; // Reset critical streak on miss
+              // Still need to recycle the enemy container to prevent issues
+              if (e.container && e.container.active && this.tweens) {
+                this.tweens.add({
+                  targets: e.container, 
+                  scale: 1.25, 
+                  alpha: 0, 
+                  duration: 220, 
+                  onComplete: () => {
+                    if (e.container && e.container.active) {
+                      this.recycleEnemyCont(e.container);
+                    }
+                  }
+                });
+              }
+              return; // Attack missed
+            }
+            
+            // Apply squad damage multiplier
+            const squadDamage = Math.floor(this.squad * this.currentSquadType.dmgMult);
+            // Apply weapon damage multiplier  
+            const weaponMultiplier = this.currentWeapon ? this.currentWeapon.dmg : 1.0;
+            // Apply armory facility bonus
+            const armoryBonus = 1.0 + ((this.baseFacilities?.armory || 0) * BASE_FACILITIES.armory.bonus);
+            // Apply formation bonus
+            const formationBonus = this.getFormationBonus();
+            // Apply rampage mode (assault squad)
+            const rampageMultiplier = (this.time.now < this.specialActiveUntil && this.currentSquadType.special === 'rampage_mode') ? 2.0 : 1.0;
+            
+            let totalDamage = Math.floor(squadDamage * weaponMultiplier * armoryBonus * formationBonus * rampageMultiplier);
+            
+            // Check for critical hit
+            const critChance = this.calculateCriticalChance();
+            const isCritical = Math.random() < critChance;
+            if(isCritical) {
+              totalDamage = Math.floor(totalDamage * COMBAT_MECHANICS.critical.multiplier);
+              this.criticalStreak++;
+              this.floatText('CRITICAL!', 0xff6b6b, -100);
+              this.flashScreen(0xff6b6b, 0.4, 200);
+            } else {
+              this.criticalStreak = 0;
+            }
+            
+            // Apply armor protection to reduce damage taken
+            const armorProtection = this.currentArmor ? this.currentArmor.protection : 1.0;
+            const adjustedEnemyPower = Math.floor(enemyPower / armorProtection);
+            let survivors = totalDamage >= enemyPower ? this.squad : this.squad - adjustedEnemyPower;
 
-            this.floatText(`${this.squad} vs ${e.count}${e.kind==='armored'?'🛡':''}`,0xffffff,-90);
+            // Show detailed combat info
+            const weaponName = this.currentWeapon?.name?.split(' ')[0] || 'Basic';
+            this.floatText(`${weaponName}: ${this.squad} vs ${e.count}${e.kind==='armored'?'🛡':''}`,0xffffff,-90);
             this.synth.battle(); 
             this.comboDamage('battle'); 
             this.doShake(e.kind==='armored'?'med':'small',140); 
@@ -1237,6 +2515,9 @@
               }
               this.squad=survivors; 
               this.refreshSquadUI();
+              this.runEnemiesDefeated++;
+              this.updateMissionProgress('defeat_enemies');
+              this.updateCampaignProgress('defeat_enemies');
               
               // Safe tween with validation
               if (e.container && e.container.active && this.tweens) {
@@ -1253,13 +2534,23 @@
                 });
               }
             } else {
-              this.squad=0; 
-              this.refreshSquadUI(); 
-              this.doShake('huge',260);
-              this.playing=false; 
-              this.synth.lose(); 
-              this.synth.stopMusic();
-              this.time.delayedCall(180,()=>this.showResult(false));
+              // Apply armor protection
+              const armorProtection = this.currentArmor ? this.currentArmor.protection : 1.0;
+              const reducedDamage = Math.floor(enemyPower / armorProtection);
+              this.squad = Math.max(0, this.squad - reducedDamage);
+              this.runTookDamage = true;
+              
+              if(this.squad <= 0) {
+                this.refreshSquadUI(); 
+                this.doShake('huge',260);
+                this.playing=false; 
+                this.synth.lose(); 
+                this.synth.stopMusic();
+                this.time.delayedCall(180,()=>this.showResult(false));
+              } else {
+                this.refreshSquadUI();
+                this.floatText(`Protected! -${reducedDamage}`, 0x95a5a6, -40);
+              }
             }
           } catch (error) {
             console.error('resolveBattle error:', error);
@@ -1309,7 +2600,10 @@
               });
             }
             
-            const actualDmg=Math.max(1,Math.floor(h.dmg*(this.mineMul||1)));
+            const baseDmg=Math.max(1,Math.floor(h.dmg*(this.mineMul||1)));
+            // Apply armor protection to mine damage
+            const armorProtection = this.currentArmor ? this.currentArmor.protection : 1.0;
+            const actualDmg = Math.floor(baseDmg / armorProtection);
             this.squad=Math.max(0,this.squad-actualDmg); 
             this.floatText('-'+actualDmg,0xd02a2a);
             this.comboDamage('mine'); 
@@ -1317,6 +2611,8 @@
             this.refreshSquadUI(); 
             this.doShake('big',160); 
             this.flashScreen(0xffffff,0.5,140);
+            this.runTookDamage = true;
+            if(actualDmg > 0) this.updateCampaignProgress('took_damage');
             
             if(this.squad<=0){ 
               this.doShake('huge',260); 
@@ -1453,7 +2749,32 @@
           if(!this.bossPhase && this.distance >= this.segEndAt && this.segIndex < this.segments.length-1){ this.enterSegment(this.segIndex+1); }
 
           this.comboMeter=clamp(this.comboMeter + COMBO_PASSIVE_PER_SEC*dt,0,COMBO_MAX);
-          this.updateComboUI(); this.updatePowerupHUD();
+          this.updateComboUI(); this.updatePowerupHUD(); this.updateSpecialAbilityUI(); this.updateGadgetUI();
+          if(this.add) this.updateFormationDisplay();
+          
+          // Weather system
+          if(this.time.now >= this.weatherChangeAt) {
+            this.changeWeather();
+          }
+          
+          // Campaign survival time tracking
+          if(this.time.now - this.lastSurvivalCheck >= 1000) {
+            this.runSurvivalTime++;
+            this.updateCampaignProgress('survive_time');
+            this.lastSurvivalCheck = this.time.now;
+          }
+          
+          // Handle medic squad healing
+          if(this.healingRate > 0 && this.time.now < this.specialActiveUntil) {
+            this.squad += this.healingRate * dt;
+            this.squad = Math.floor(this.squad);
+            this.refreshSquadUI();
+          }
+          
+          // Track survival time and achievements
+          this.runSurvivalTime += dt;
+          this.checkAchievement('survivor');
+          this.updateMissionProgress('survive', dt);
 
           this.runScore += (SCORE_PER_SECOND*this.comboMultiplier)*dt;
           this.scoreText.setText('Score: ' + Math.floor((this.carryScore||0) + this.runScore));
@@ -1493,7 +2814,16 @@
                 continue;
               }
               
-              e.container.y += mv;
+              // Apply enemy-specific movement speed with slow effect
+              let speedMult = e.speed || 1.0;
+              if(this.time.now < this.slowEnemiesUntil) speedMult *= 0.3; // 70% slower
+              // Apply weather effects
+              const weather = WEATHER_EFFECTS[this.currentWeather];
+              if(weather) speedMult *= weather.speedMult;
+              const moveSpeed = mv * speedMult;
+              e.container.y += moveSpeed;
+              
+              // Handle zig movement
               if(e.kind==='zig' && !e.resolved && this.time.now >= (e.nextZigAt||0)){
                 let next=e.lane+(e.dir||1); 
                 if(next<0||next>2){ 
@@ -1511,6 +2841,32 @@
                   }); 
                 }
                 e.nextZigAt=this.time.now+450;
+              }
+              
+              // Handle drone swarming behavior
+              if(e.kind==='drone' && !e.resolved && this.time.now >= (e.nextZigAt||0)){
+                const targetLane = this.laneIndex; // Drones target player
+                if(e.lane !== targetLane) {
+                  const dir = targetLane > e.lane ? 1 : -1;
+                  e.lane = clamp(e.lane + dir, 0, 2);
+                  const nx=GAME_W/2+LANES_X[e.lane]; 
+                  if (this.tweens && e.container.active) {
+                    this.tweens.add({
+                      targets: e.container,
+                      x: nx,
+                      duration: 100,
+                      ease: 'Sine.easeOut'
+                    }); 
+                  }
+                }
+                e.nextZigAt=this.time.now+300; // Faster movement updates
+              }
+              
+              // Handle sniper shooting
+              if(e.kind==='sniper' && !e.resolved && this.time.now >= (e.nextShotAt||0)){
+                this.spawnProjectile(e.lane, e.container.y + 30, 'sniper');
+                e.nextShotAt = this.time.now + Phaser.Math.Between(2500, 4000);
+                this.synth.warn();
               }
               const near=Math.abs(e.container.y-PLAYER_Y)<34;
               if(!e.resolved&&near&&e.lane===this.laneIndex) this.resolveBattle(e);
@@ -1573,13 +2929,21 @@
                 if(!c.picked && ((nearY && c.lane===this.laneIndex) || magnetGrab)){
                   c.picked=true; 
                   this.runPickupCoins += 1; 
-                  this.runScore += 10*this.comboMultiplier;
+                  const coinValue = 10 * this.comboMultiplier;
+                  const boostedValue = (this.time.now < this.coinBoostUntil) ? coinValue * 2 : coinValue;
+                  this.runScore += boostedValue;
+                  this.updateCampaignProgress('collect_coins');
                   this.comboAdd(COMBO_GAIN.coin); 
                   this.synth.coin();
                   this.burst(c.img.x,c.img.y,10,0xfff0a0,140,300); 
                   this.doShake('tiny',80);
                   this.recycleCoinImg(c.img);
                   coinsToRemove.push(i);
+                  
+                  // Achievement and mission tracking
+                  this.checkAchievement('first_coin');
+                  this.checkAchievement('collector');
+                  this.updateMissionProgress('collect_coins');
                 }
                 else if(c.img.y>GAME_H+40){ 
                   this.recycleCoinImg(c.img); 
@@ -1637,6 +3001,57 @@
               this.powerups.splice(powerupsToRemove[i], 1);
             }
 
+            // Process projectiles with safe iteration
+            const projectilesToRemove = [];
+            for(let i = 0; i < this.projectiles.length; i++){
+              const p = this.projectiles[i];
+              if (!p.container || !p.container.active) {
+                projectilesToRemove.push(i);
+                continue;
+              }
+              
+              try {
+                p.container.y += p.speed * dt;
+                
+                // Check for player collision
+                const nearY = Math.abs(p.container.y - PLAYER_Y) < 25;
+                if(nearY && p.lane === this.laneIndex && !this.consumeShield()) {
+                  // Player hit by projectile
+                  const damage = 3; // Projectiles do less damage than mines
+                  this.squad = Math.max(0, this.squad - damage);
+                  this.floatText('-' + damage, 0xff4444, -60);
+                  this.runTookDamage = true;
+                  this.burst(this.player.x, this.player.y - 20, 8, 0xff4444, 120, 250);
+                  this.doShake('med', 120);
+                  this.synth.battle();
+                  this.refreshSquadUI();
+                  this.recycleProjectile(p.container);
+                  projectilesToRemove.push(i);
+                  
+                  if(this.squad <= 0) {
+                    this.doShake('huge', 260);
+                    this.playing = false;
+                    this.synth.lose();
+                    this.synth.stopMusic();
+                    this.time.delayedCall(150, () => this.showResult(false));
+                  }
+                }
+                else if(p.container.y > GAME_H + 50) {
+                  // Projectile missed
+                  this.recycleProjectile(p.container);
+                  projectilesToRemove.push(i);
+                }
+              } catch (error) {
+                console.error('Projectile processing error:', error);
+                if (DEBUG) showDiagnosticOverlay(`Projectile error: ${error.message}`);
+                projectilesToRemove.push(i);
+              }
+            }
+            // Remove in reverse order to maintain indices
+            for(let i = projectilesToRemove.length - 1; i >= 0; i--) {
+              this.projectiles.splice(projectilesToRemove[i], 1);
+            }
+
             this._coinSpawnAcc += delta;
             if(this._coinSpawnAcc >= this.coinEvery && this.distance < LEVEL_LENGTH-800){
               this._coinSpawnAcc=0; const chain=Phaser.Math.Between(1,3), lane=Phaser.Math.Between(0,2);
@@ -1668,6 +3083,11 @@
             }
             if(this.bossHP<=0 && this.playing){
               this.playing=false; this.synth.win(); this.synth.stopMusic(); this.doShake('big',160);
+              this.finished = true;
+              this.updateCampaignProgress('defeat_boss');
+              this.checkAchievement('boss_slayer');
+              this.checkAchievement('speed_demon');
+              this.checkAchievement('perfectionist');
               if(this.boss) this.tweens.add({targets:this.boss,scale:1.1,alpha:0,duration:250,onComplete:()=>this.boss.destroy()});
               this.time.delayedCall(220,()=>this.showResult(true));
             }
@@ -1690,6 +3110,12 @@
         /* ---------- Results (centered) ---------- */
         showResult(won){
           if(this.attackTimer){ this.attackTimer.remove(false); this.attackTimer=null; }
+          
+          // Check for no-damage mission completion
+          if(won && this.campaignMode && this.currentMission && this.currentMission.objective === 'no_damage' && !this.runTookDamage) {
+            this.completeCampaignMission();
+          }
+          
           const finalScore=Math.floor((this.carryScore||0)+this.runScore);
           if(finalScore>this.highScore) this.highScore=finalScore;
           if(won) this.carryScore=Math.floor((this.carryScore||0)+this.runScore); else this.carryScore=0;
